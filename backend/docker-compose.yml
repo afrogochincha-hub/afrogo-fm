@@ -1,0 +1,23 @@
+services:
+  afrogo-api:
+    build: .
+    container_name: afrogo-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: 8787
+    # Solo accesible desde el propio servidor; publícalo mediante un proxy HTTPS (Caddy/Nginx).
+    ports:
+      - "127.0.0.1:8787:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - afrogo-users:/data
+    networks:
+      - afrogo-internal
+volumes:
+  afrogo-users:
+networks:
+  afrogo-internal:
+    driver: bridge

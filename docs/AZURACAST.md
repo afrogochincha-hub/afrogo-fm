@@ -1,25 +1,34 @@
-# Integración segura con AzuraCast
+# Integración de AzuraCast
 
-## Radio oficial configurada
-- Página pública: `http://129.153.179.138/public/afrogo-fm`
-- Stream configurado según el patrón estándar de AzuraCast: `http://129.153.179.138/listen/afrogo-fm/radio.mp3`
-- Endpoint público de metadatos: `http://129.153.179.138/api/nowplaying/afrogo-fm`
+## Estación
+- Página pública facilitada: `http://129.153.179.138/public/afrogo-fm`
+- Stream provisional: `http://129.153.179.138/listen/afrogo-fm/radio.mp3`
+- Metadatos de la transmisión: `http://129.153.179.138/api/nowplaying/afrogo-fm`
 
-La URL de stream está configurada en la aplicación de PC v3.17.0 y en el prototipo Android Auto v1.1. Esta URL sigue el formato habitual de AzuraCast para el station URL stub y el mount point MP3 predeterminado, pero debe confirmarse en **AzuraCast > Public > Listen** si se configuró un mount point personalizado. No se pudo verificar la conexión real al servidor desde el entorno de desarrollo.
+La página pública no es el catálogo de archivos. El gateway usa la API autenticada de AzuraCast para listar los medios de la estación y reproducir archivos individuales. La documentación oficial confirma que los datos de “Ahora suena” son públicos, mientras que las operaciones sensibles requieren una API Key y que esa clave hereda los permisos de la cuenta que la creó: https://www.azuracast.com/docs/developers/apis/ y https://www.azuracast.com/docs/developers/now-playing-data/.
 
-## Enfoque de conexión
-1. Para escuchar la emisora, usar la URL de stream directa que proporciona AzuraCast.
-2. Para mostrar título y artista de lo que suena, consultar la API pública de metadatos cuando esté disponible. La aplicación maneja el fallo de metadatos sin depender de ellos para reproducir el stream.
-3. Para explorar archivos individuales del catálogo o realizar operaciones autenticadas, validar qué API soporta la versión instalada de AzuraCast y qué permisos tiene la clave.
-4. Si el acceso necesita credenciales, colocar una API propia entre clientes y AzuraCast. La API propia autentica al usuario de Afrogo y expone solo operaciones permitidas.
+## Flujo de música
+1. El gateway llama a `GET /api/station/{station_id}/files` con `Authorization: Bearer <API_KEY>`.
+2. La app consume `GET /api/catalog`, que normaliza título, artista, álbum, género, duración, pista y portada.
+3. El audio individual pasa por `GET /api/station/{station_id}/file/{id}/play` desde el gateway. Las URLs entregadas a la app tienen tickets temporales y no contienen la API Key de AzuraCast.
+4. La app de PC sube archivos mediante el endpoint del gateway; el gateway los reenvía al Media Manager de AzuraCast.
 
-## Seguridad crítica
-- No guardar la API Key de AzuraCast en Kotlin, JavaScript, archivos de configuración versionados, GitHub Actions ni APK.
-- La API key que se compartió anteriormente en una captura debe revocarse y regenerarse.
-- Guardar la nueva clave como secreto del servidor. Si el backend no está desplegado aún, no implementar acciones que requieran la clave desde la aplicación cliente.
-- El servidor de radio usa actualmente HTTP. Para una distribución pública, se recomienda configurar HTTPS con certificado válido y actualizar las URLs.
-- No enviar credenciales por HTTP.
-- Aplicar privilegio mínimo, límites de solicitudes, validación de entradas y registros sin secretos.
+## Qué debe configurarse en el servidor
+- ID numérico real de la estación, `AZURACAST_STATION_ID`.
+- API Key recién creada, guardada en `backend/.env` y con permiso para leer medios de esa estación.
+- Base URL de AzuraCast accesible desde el servidor/gateway. Si se usa HTTP internamente, mantén el tráfico en una red local de confianza; no envíes la API Key sin cifrar por Internet.
+- URL HTTPS pública del gateway (`PUBLIC_API_BASE_URL`).
+- La URL de stream debe confirmarse en **AzuraCast → Public → Listen**, pues el mount point puede ser personalizado.
 
-## Biblioteca central
-La intención es que audio y metadatos vivan en el servidor, no en GitHub ni duplicados entre apps. Antes de diseñar la navegación de archivos, comprobar si la instalación usa biblioteca local de AzuraCast, playlists de la estación, AutoDJ o una combinación. No asumir que la URL de la página pública puede listar todos los archivos.
+La API Key previamente expuesta debe revocarse. No se guarda ninguna API Key en los repositorios, configuraciones de los clientes, APK ni artefactos de compilación. Sigue la [guía de despliegue](DEPLOY_AZURACAST.md).
+
+
+## Confirmación de acceso al catálogo
+La consulta de Swagger a `GET /api/station/1/files` devolvió HTTP `200 Success` y un listado de archivos de la estación 1. El conector del backend usa la cabecera `X-API-Key` que indica tu documentación de Swagger. La respuesta real de algunos archivos solo contiene `path`, `length`, `art` y campos técnicos, por lo que el gateway extrae título del campo `text` cuando existe y, como respaldo, del nombre de archivo. Artista/álbum/género solo pueden completarse si AzuraCast los entrega o si hay una fuente fiable de metadatos.
+
+## Gateway público validado
+- Base API: `https://afrogochincha.duckdns.org/afrogo-api`
+- Health: `https://afrogochincha.duckdns.org/afrogo-api/health` (probado desde navegador con HTTP 200).
+- Catálogo: `https://afrogochincha.duckdns.org/afrogo-api/api/catalog` (probado desde Windows con sesión de administrador; devolvió 267 canciones).
+- Los enlaces `playUrl` y `coverUrl` del catálogo usan esta misma base HTTPS.
+- No subir API keys ni contraseñas al repositorio.

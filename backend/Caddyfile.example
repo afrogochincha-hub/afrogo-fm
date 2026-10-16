@@ -1,0 +1,6 @@
+# Ejemplo: intégralo en el proxy público que ya use el servidor.
+# No inicies un segundo proxy en los puertos 80/443 si AzuraCast ya los ocupa.
+api.TU-DOMINIO {
+    encode gzip
+    reverse_proxy 127.0.0.1:8787
+}

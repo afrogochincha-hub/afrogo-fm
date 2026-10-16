@@ -1,32 +1,55 @@
 # Afrogo FM
 
-Repositorio privado para organizar el desarrollo de Afrogo FM para PC y Android, incluida la compatibilidad con Android Auto y la conexión con AzuraCast.
+Repositorio privado con código fuente de Afrogo FM para Windows, Android y Android Auto, conectado a la biblioteca central de AzuraCast mediante una API propia.
 
-## Estado actual
+## Módulos
+- `desktop/`: aplicación Electron para Windows, versión 3.23.0.
+- `android/`: app nativa Android, versión 1.4.0. El mismo APK ofrece el servicio multimedia compatible con Android Auto.
+- `backend/`: gateway de autenticación, catálogo, administración de accesos y proxy multimedia de AzuraCast.
+- `docs/`: instalación, desarrollo, releases e integración segura de AzuraCast.
+- `.github/workflows/build.yml`: comprobación del backend y builds de Windows/Android en GitHub Actions.
 
-Este repositorio comienza como la base de organización del proyecto. Los directorios de plataforma se irán completando con los proyectos fuente existentes; no representan todavía una aplicación Android lista para instalar ni una integración de servidor ya validada.
+## Cómo comparte música
+La música permanece en el Media Manager de AzuraCast. PC y Android consultan `GET /api/catalog` desde el gateway. El gateway usa la API Key solo en el servidor, y crea URL firmadas temporales para reproducir canciones y portadas. La subida de música desde PC a AzuraCast está controlada por una opción de seguridad y permanece desactivada hasta actualizar AzuraCast a una versión parcheada y comprobar el endpoint de carga. No se guardan canciones en GitHub.
 
-## Estructura
+## Estado y requisitos de instalación
+El gateway está desplegado en el servidor del usuario y responde a través de HTTPS. Se comprobó el estado público, y la consulta autenticada a `GET /api/catalog` desde Windows devolvió 267 canciones. El audio completo y las portadas deben probarse en cada cliente. Para mantener la instalación, conserva:
 
-- `desktop/`: aplicación para Windows basada en Electron.
-- `android/`: aplicación nativa Android con Kotlin y Media3; punto de integración de Android Auto.
-- `backend/`: API propia para autenticación, permisos y acceso seguro a AzuraCast.
-- `docs/`: decisiones de arquitectura, desarrollo, publicación y despliegue.
-- `.github/workflows/`: automatización de comprobaciones y compilaciones.
+1. Una URL HTTPS real para el gateway.
+2. El ID numérico correcto de la estación AzuraCast.
+3. Una API Key nueva (la clave mostrada anteriormente debe revocarse y regenerarse).
+4. Un administrador inicial definido por variables de entorno en el servidor.
+5. La URL de la API ya está incluida por defecto en las fuentes y en GitHub Actions; se puede sobrescribir con la variable `AFROGO_API_BASE_URL`.
+6. Mantén las subidas desactivadas hasta verificar la versión de AzuraCast y los permisos de la API de archivos.
 
-## Requisitos importantes
+El stream HTTPS usa el dominio `afrogochincha.duckdns.org`; si AzuraCast tiene un mount point personalizado, confirma la ruta exacta en **AzuraCast → Public → Listen** antes de distribuir el APK.
 
-- No guardar claves API, contraseñas, tokens, certificados de firma ni archivos `.env` con secretos en el repositorio.
-- No subir música con copyright ni archivos grandes de la biblioteca. La música debe permanecer en AzuraCast o en el almacenamiento previsto.
-- Las claves de AzuraCast deben revocarse y rotarse si alguna vez se muestran o comparten.
-- Android Auto requiere una integración nativa compatible con las reglas multimedia para vehículos.
-- Mantener el mismo applicationId y proteger la clave de firma de lanzamiento es necesario para actualizar una app Android existente sin perder continuidad.
-- La distribución desde GitHub no actualiza automáticamente las aplicaciones instaladas. Para distribución general se recomienda Google Play; GitHub Actions puede generar las compilaciones.
+## Acceso y seguridad
+- La autenticación y aprobación de usuarios se valida en el backend; las cuentas nuevas se registran como pendientes.
+- No incrustar la API Key de AzuraCast ni `JWT_SECRET` en la app, APK, GitHub o archivos de configuración de cliente.
+- En producción el gateway rechaza autenticación y catálogo si la petición no llega por HTTPS.
+- El primer administrador se crea con `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD` en el servidor. Nunca hay credenciales predeterminadas en el código fuente.
+- Mantén el puerto del backend ligado a localhost y expón el API a través del proxy HTTPS que ya utilice el servidor.
 
-## Inicio
+## Compilar
 
-Consulta [docs/ROADMAP.md](docs/ROADMAP.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) y [docs/AZURACAST.md](docs/AZURACAST.md).
+- **PC:** instala Node.js 22+, configura `desktop/app-config.json` con `apiBaseUrl` HTTPS y ejecuta `desktop/CREAR_EXE_WINDOWS.bat` en Windows.
+- **Android y Android Auto:** en Android Studio o Gradle, define `-PafrogoApiBaseUrl=https://afrogochincha.duckdns.org/afrogo-api` y compila `assembleDebug`. Un APK incorpora móvil y Android Auto; no son paquetes separados.
+- **GitHub Actions:** configura la variable del repositorio `AFROGO_API_BASE_URL` y después revisa `Actions`. Los artefactos de depuración no equivalen a una publicación firmada de Google Play.
 
-## Versionado
+Consulta [docs/DEPLOY_AZURACAST.md](docs/DEPLOY_AZURACAST.md), [docs/AZURACAST.md](docs/AZURACAST.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) y [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Usaremos Git para registrar cambios incrementales y etiquetas como `vX.Y.Z` para versiones de lanzamiento. No reemplazar el historial por archivos ZIP sucesivos: se deben incorporar los fuentes y los cambios en commits revisables.
+## Versiones fuente
+- PC 3.23.0
+- Android + Android Auto 1.4.0
+- Gateway Afrogo 1.0.1
+
+
+### Corrección del conector 1.0.1
+- La clave de AzuraCast se transmite mediante `X-API-Key`, según la documentación Swagger real del servidor.
+- `GET /api/station/1/files` fue verificado manualmente por el usuario con respuesta 200.
+- Los archivos sin metadatos enriquecidos usan el nombre de archivo como título de respaldo; esto no inventa artistas ni álbumes.
+
+
+## Validación AzuraCast (2026-10-16)
+La consulta Swagger `GET /api/station/1/files` fue ejecutada por el usuario y devolvió HTTP 200 con archivos de la biblioteca. El gateway de esta revisión envía `X-API-Key`, conserva títulos/artistas/álbumes proporcionados por AzuraCast y usa el nombre de archivo como respaldo si faltan metadatos. La integración sigue necesitando desplegar el gateway y probar el catálogo/audio contra la instalación real desde las apps.

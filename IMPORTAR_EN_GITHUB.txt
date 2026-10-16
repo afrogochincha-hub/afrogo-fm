@@ -1,0 +1,27 @@
+AFROGO FM — PAQUETE COMPLETO DE FUENTES
+
+Incluye PC Electron 3.23.0, Android/Android Auto 1.4.0, gateway Afrogo 1.0.1 y GitHub Actions.
+
+REPOSITORIO: https://github.com/afrogochincha-hub/afrogo-fm
+
+IMPORTAR:
+1. Descarga y extrae este ZIP.
+2. Clona el repositorio privado con GitHub Desktop.
+3. Copia/combina TODO el contenido de esta carpeta en la raíz del repositorio clonado. Conserva los archivos .git y no copies node_modules, música ni .env.
+4. Revisa el diff. Haz Commit y Push.
+5. En GitHub, abre Actions y revisa los artifacts: ejecutable portable de Windows y APK de depuración Android.
+
+API CENTRAL YA CONFIGURADA:
+https://afrogochincha.duckdns.org/afrogo-api
+La consulta autenticada desde Windows fue probada y devolvió 267 canciones. El endpoint health respondió HTTP 200 por HTTPS. La reproducción real de audio debe probarse en PC, teléfono y Android Auto después de compilar.
+
+SEGURIDAD:
+- Nunca subas backend/.env, API keys, JWT_SECRET, contraseñas ni claves de firma.
+- No añadas archivos musicales a GitHub; la biblioteca permanece en AzuraCast.
+- La API Key de AzuraCast solo permanece en el servidor.
+- Las subidas de canciones están desactivadas por defecto en el gateway hasta verificar los permisos y la API de carga de la instalación.
+
+VERSIONES:
+- PC: 3.23.0
+- Android + Android Auto (mismo APK): 1.4.0
+- Gateway: 1.0.1

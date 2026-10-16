@@ -1,0 +1,10 @@
+AFROGO FM 3.23.0 — PC
+
+- Inicio de sesión y registro contra el backend central.
+- Catálogo de canciones consultado desde AzuraCast: títulos, artistas, álbumes, portada, género y orden de pista, si están disponibles en los metadatos.
+- Carga masiva desde Administrar al Media Manager central de AzuraCast.
+- El catálogo reproducible ya no mezcla archivos antiguos guardados localmente.
+- Se eliminó el acceso demo y no se incluye una cuenta con contraseña fija.
+- Playlists, favoritos e historial se conservan localmente en este paquete; la sincronización entre dispositivos será una mejora aparte.
+
+Antes de publicar, configura HTTPS, deploy del backend, ID real de estación y API Key nueva con permisos mínimos. La clave antigua que aparecía en una captura debe revocarse.

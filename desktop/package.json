@@ -1,0 +1,46 @@
+{
+  "name": "afrogo-fm",
+  "version": "3.23.0",
+  "description": "Afrogo FM conectado al cat\u00e1logo central AzuraCast con biblioteca por \u00e1lbumes y radio en vivo",
+  "main": "main.js",
+  "author": "Afrogo FM",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "check": "node --check main.js && node --check preload.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.afrogo.fm",
+    "productName": "Afrogo FM",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "package.json",
+      "app-config.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "icon": "afrogo-icon.ico"
+    }
+  },
+  "dependencies": {
+    "music-metadata": "^10.7.0"
+  }
+}

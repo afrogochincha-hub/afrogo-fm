@@ -1,13 +1,17 @@
-# Afrogo FM para Android y Android Auto
+# Afrogo FM para Android — 1.4.0
 
-Aquí se importará y revisará el proyecto nativo Android. El objetivo es una app Kotlin que utilice AndroidX Media3 para reproducción y MediaSession, con navegación multimedia compatible con Android Auto.
+Proyecto fuente Android nativo (Kotlin + Media3). El mismo APK incluye el servicio multimedia que Android Auto utiliza; no se debe distribuir como dos aplicaciones independientes.
 
-Este directorio es solo un marcador de posición documental; todavía no contiene un proyecto Gradle compilable.
+## Catálogo central de AzuraCast
 
-## Requisitos de producto
-- Reproducción estable en segundo plano.
-- Controles multimedia, cola y metadatos.
-- Navegación de biblioteca legible y segura para conducir.
-- Conexión al stream y metadatos de AzuraCast.
-- Ninguna API key privada incrustada en el APK.
-- applicationId y configuración de firma documentados antes de lanzar a producción.
+La app inicia sesión o solicita acceso en el gateway HTTPS de Afrogo y lee `GET /api/catalog`. El servicio multimedia también usa ese catálogo para navegación por álbumes/canciones en Android Auto. La API Key de AzuraCast está solo en el backend, no en el APK.
+
+Configura el gateway al compilar:
+
+```bash
+gradle --no-daemon -p . -PafrogoApiBaseUrl=https://afrogochincha.duckdns.org/afrogo-api assembleDebug
+```
+
+Se requiere el Android SDK 35, JDK 17 y una instalación Gradle compatible con el Android Gradle Plugin del proyecto. Este ZIP es código fuente, no APK ya compilado. Antes de publicar, configura HTTPS, valida la ID de estación y prueba reproducción en un teléfono real.
+
+La aplicación usa el mismo catálogo central de AzuraCast. No configures la API Key de AzuraCast en Android.
