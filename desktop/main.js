@@ -7,6 +7,25 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const mm = require('music-metadata');
 
+// Read runtime configuration in the main process (full Node.js is available here).
+// Electron's sandboxed preload has a restricted require() and must not read app-config.json itself.
+function loadAfrogoRuntimeConfig() {
+  let apiBaseUrl = String(process.env.AFROGO_API_BASE_URL || '').trim();
+  if (!apiBaseUrl) {
+    try {
+      const configPath = path.join(__dirname, 'app-config.json');
+      const configText = fs.readFileSync(configPath, 'utf8').replace(/^\uFEFF/, '');
+      const config = JSON.parse(configText);
+      apiBaseUrl = String(config.apiBaseUrl || '').trim();
+    } catch (error) {
+      console.warn('[Afrogo FM] No se pudo leer app-config.json:', error.message);
+    }
+  }
+  apiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
+  const allowInsecureHttp = process.env.AFROGO_ALLOW_INSECURE_HTTP === '1';
+  return { apiBaseUrl, allowInsecureHttp };
+}
+
 protocol.registerSchemesAsPrivileged([{ scheme: 'afrogo-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }]);
 const allowedExt = new Set(['.mp3','.m4a','.ogg','.wav','.flac','.aac','.opus']);
 const libraryDir = () => path.join(app.getPath('userData'), 'library');
@@ -338,10 +357,20 @@ app.whenReady().then(async () => {
 });
 
 function createWindow() {
+  const runtimeConfig = loadAfrogoRuntimeConfig();
   const win = new BrowserWindow({
     width: 1280, height: 850, minWidth: 900, minHeight: 650,
     title: 'Afrogo FM', icon: path.join(__dirname, 'afrogo-icon.png'), backgroundColor: '#100D14', autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      // Pass only non-secret public configuration to the sandboxed preload.
+      additionalArguments: [
+        `--afrogo-api-base-url=${runtimeConfig.apiBaseUrl}`,
+        `--afrogo-allow-insecure-http=${runtimeConfig.allowInsecureHttp ? '1' : '0'}`
+      ]
+    }
   });
   // Evita abrir pestañas o ventanas externas; la radio se reproduce dentro de la app.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

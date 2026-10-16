@@ -1,3 +1,7 @@
+## 3.23.1
+- Fixed packaged Windows app API configuration: main process reads app-config.json and passes non-secret URL to sandboxed preload.
+- Removed file-system access from the preload so the HTTPS gateway URL is available in packaged builds.
+
 ## 3.23.0
 - Configurada por defecto la API HTTPS pública de Afrogo para iniciar sesión y consultar el catálogo central AzuraCast.
 - La reproducción y las portadas de canciones remotas utilizan enlaces multimedia del gateway.
