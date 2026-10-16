@@ -263,7 +263,7 @@ class MainActivity : Activity() {
     }
 
     private fun updatePlaybackUi() {
-        val current = controller?.currentMediaMetadata
+        val current = controller?.currentMediaItem?.mediaMetadata
         val playing = controller?.isPlaying == true
         radioButton.text = if (playing && controller?.currentMediaItem?.mediaId == "afrogo_live_stream") "Ⅱ  Pausar Afrogo FM" else "▶  Escuchar Afrogo FM en vivo"
         if (playing && current != null && controller?.currentMediaItem?.mediaId != "afrogo_live_stream") {

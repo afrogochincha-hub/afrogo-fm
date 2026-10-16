@@ -13,8 +13,8 @@ android {
         applicationId = "com.afrogo.fm"
         minSdk = 23
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.4.0"
+        versionCode = 5
+        versionName = "1.4.1"
         buildConfigField("String", "AFROGO_API_BASE_URL", "\"$afrogoApiBaseUrl\"")
     }
     buildTypes { release { isMinifyEnabled = false } }
