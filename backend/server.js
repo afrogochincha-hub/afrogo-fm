@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Readable } = require('node:stream');
+const { classifyGenre } = require('./genre-classifier');
 
 // Carga .env simple, sin dependencia externa. Las variables del proceso tienen prioridad.
 function loadEnvFile(file) {
@@ -209,11 +210,19 @@ function normalizeMedia(row) {
   const title = String(media.title || (media.song && media.song.title) || row.title || row.name || textTitle || filenameMeta.title || 'Canción sin título').trim();
   const artist = String(media.artist || (media.song && media.song.artist) || row.artist || textArtist || filenameMeta.artist || '').trim() || 'Artista desconocido';
   const album = String(media.album || (media.song && media.song.album) || row.album || '').trim();
-  const genre = String(media.genre || row.genre || '').split(/[;,]/)[0].trim() || 'Sin categoría';
+  const metaContainers = [media, row, media.song || {}, row.song || {}, media.extra_metadata || {}, row.extra_metadata || {}, media.custom_fields || {}, row.custom_fields || {}, media.metadata || {}, row.metadata || {}, media.tags || {}, row.tags || {}];
+  const rawGenreValues = [];
+  for (const container of metaContainers) {
+    const candidate = container && (container.genre ?? container.genres ?? container.genre_name ?? container.genreName);
+    if (Array.isArray(candidate)) rawGenreValues.push(...candidate.filter(v => typeof v === 'string' && v.trim()));
+    else if (typeof candidate === 'string' && candidate.trim()) rawGenreValues.push(candidate.trim());
+  }
+  const genreInfo = classifyGenre(rawGenreValues.join('; '), { title, artist, album, path: pathValue });
+  const genre = genreInfo.genre;
   const durationRaw = Number(media.length ?? media.duration ?? row.length ?? row.duration ?? 0);
   const trackNumber = Number((media.track && (media.track.no || media.track)) || media.track_number || row.trackNumber || 0) || 0;
   const discNumber = Number((media.disk && (media.disk.no || media.disk)) || media.disc_number || row.discNumber || 0) || 0;
-  return { id, title, artist, album, genre, duration: Number.isFinite(durationRaw) ? durationRaw : 0, trackNumber, discNumber, path: pathValue, artId: extractArtId(media, row || {}), isPlayable: media.is_playable !== false && row.is_playable !== false };
+  return { id, title, artist, album, genre, genreSource: genreInfo.source, genreConfidence: genreInfo.confidence, duration: Number.isFinite(durationRaw) ? durationRaw : 0, trackNumber, discNumber, path: pathValue, artId: extractArtId(media, row || {}), isPlayable: media.is_playable !== false && row.is_playable !== false };
 }
 function extractRows(body) {
   if (Array.isArray(body)) return body;
@@ -230,7 +239,7 @@ function publicTrack(track) {
   const playTicket = makeMediaTicket(track, 'play');
   const artTicket = track.artId ? makeMediaTicket(track, 'art') : null;
   return {
-    id: track.id, title: track.title, artist: track.artist, album: track.album || '', genre: track.genre,
+    id: track.id, title: track.title, artist: track.artist, album: track.album || '', genre: track.genre, genreSource: track.genreSource, genreConfidence: track.genreConfidence,
     duration: track.duration, trackNumber: track.trackNumber, discNumber: track.discNumber,
     coverUrl: artTicket ? `${origin}/api/tracks/${id}/art?ticket=${encodeURIComponent(artTicket)}` : '',
     playUrl: `${origin}/api/tracks/${id}/play?ticket=${encodeURIComponent(playTicket)}`,

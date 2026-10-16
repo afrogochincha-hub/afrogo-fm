@@ -17,7 +17,7 @@ jobs:
           node-version: 22
       - name: Check gateway syntax
         working-directory: backend
-        run: node --check server.js
+        run: npm run check
 
   windows-desktop:
     runs-on: windows-latest

@@ -22,3 +22,7 @@ La URL del stream y los endpoints de la API se han configurado según el formato
 
 ## API central de Afrogo
 La configuración `app-config.json` apunta a `https://afrogochincha.duckdns.org/afrogo-api`. La aplicación utiliza esta API para inicio de sesión, solicitudes de acceso, administración de usuarios y catálogo multimedia de AzuraCast. No se incluye ninguna API Key de AzuraCast en la app.
+
+## Clasificación automática de géneros (3.25.0)
+
+El cliente normaliza el género del catálogo central. Si falta el tag, utiliza señales explícitas del título/álbum/ruta y reglas conservadoras de artistas conocidos. Las categorías de acceso rápido agrupan alias compatibles y muestran el número de canciones detectadas. Lo que no tenga señales suficientes queda como `Sin categoría`; no se presenta una inferencia como una certeza acústica.

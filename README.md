@@ -53,3 +53,9 @@ Consulta [docs/DEPLOY_AZURACAST.md](docs/DEPLOY_AZURACAST.md), [docs/AZURACAST.m
 
 ## Validación AzuraCast (2026-10-16)
 La consulta Swagger `GET /api/station/1/files` fue ejecutada por el usuario y devolvió HTTP 200 con archivos de la biblioteca. El gateway de esta revisión envía `X-API-Key`, conserva títulos/artistas/álbumes proporcionados por AzuraCast y usa el nombre de archivo como respaldo si faltan metadatos. La integración sigue necesitando desplegar el gateway y probar el catálogo/audio contra la instalación real desde las apps.
+
+
+Corrección Android 1.4.1: arregla las referencias de Media3/Guava y la firma de callbacks de la biblioteca multimedia.
+
+## PC 3.24.0: reconocimiento visual de portadas
+La sección Álbumes compara visualmente las portadas y reúne pistas que usan la misma imagen, aunque los textos de artista/álbum tengan pequeñas diferencias. Cuando no puede analizarse una imagen por restricciones de acceso, se conserva el agrupamiento por metadatos.

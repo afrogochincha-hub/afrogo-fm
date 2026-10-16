@@ -1,0 +1,8 @@
+Afrogo FM 3.25.0 — Clasificación automática de géneros
+
+- Lee géneros disponibles en los metadatos de AzuraCast.
+- Si falta el género, infiere de forma conservadora usando título, álbum, ruta y artistas conocidos.
+- Categorías de acceso rápido aceptan sinónimos y subgéneros compatibles.
+- Muestra cuántas canciones detectó cada categoría.
+- Las pistas sin señales suficientes quedan en “Sin categoría”; no se finge reconocimiento acústico.
+- Pruebas automatizadas incluidas para los géneros.

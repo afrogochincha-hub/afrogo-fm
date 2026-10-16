@@ -1,3 +1,17 @@
+# Cambios recientes
+
+## 3.25.0
+- Clasificación automática de géneros para canciones de AzuraCast usando tags disponibles, título, álbum, ruta y reglas de artistas conocidos.
+- Categorías de acceso rápido agrupan alias compatibles (por ejemplo Reguetón/Trap en Urbano; Chicha en Cumbia; EDM en Electrónica).
+- Las filas de categoría muestran cuántas canciones disponibles detectó Afrogo.
+- El gateway devuelve `genreSource` y `genreConfidence` para distinguir metadatos del servidor de inferencias.
+- Añadidas pruebas automatizadas para los géneros y sus alias.
+
+## 3.24.0
+- La sección Álbumes calcula una huella visual perceptual de las portadas para reunir canciones que usan la misma imagen aunque el título del álbum o el artista estén escritos de forma distinta.
+- La agrupación mantiene artista + álbum como base cuando no se puede leer una portada, por ejemplo por restricciones CORS o ausencia de imagen.
+- La portada dominante se usa para la tarjeta y el detalle; las pistas se ordenan por disco/número de pista cuando existe esa información.
+
 ## 3.23.1
 - Fixed packaged Windows app API configuration: main process reads app-config.json and passes non-secret URL to sandboxed preload.
 - Removed file-system access from the preload so the HTTPS gateway URL is available in packaged builds.
