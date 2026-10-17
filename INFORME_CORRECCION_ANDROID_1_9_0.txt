@@ -1,0 +1,20 @@
+AFROGO FM ANDROID 1.9.0 — INFORME DE CORRECCIÓN
+
+Corrección aplicada:
+- MainActivity.kt: se sustituyeron las referencias no válidas ScrollView.LayoutParams por FrameLayout.LayoutParams en la construcción de las vistas dentro de ScrollView (líneas aproximadas 222–223 y 395–396).
+- Se conservaron el resto del código y las carpetas del proyecto. No se añadió ni reemplazó ninguna carpeta .git.
+
+Comprobaciones realizadas:
+- No quedan referencias a ScrollView.LayoutParams en el código Android.
+- npm run check en backend terminó correctamente: 5 pruebas aprobadas.
+
+Limitación importante:
+- Este entorno no tiene Gradle ni Android SDK instalados, así que no fue posible ejecutar aquí `gradle --no-daemon -p android assembleDebug`. Por tanto, no se afirma que la compilación Android esté confirmada. GitHub Actions debe verificarla después de subir los cambios.
+
+Cómo aplicar:
+1. Haz una copia de seguridad de tu carpeta local afrogo-fm.
+2. Extrae este ZIP en una carpeta temporal.
+3. Copia las carpetas y archivos extraídos sobre tu carpeta local afrogo-fm y acepta combinar/reemplazar archivos.
+4. NO borres ni reemplaces la carpeta .git de tu repositorio local. Este ZIP no incluye .git.
+5. Abre GitHub Desktop, revisa los cambios y confirma el commit; después pulsa Push origin.
+6. En GitHub, entra en Actions y abre el flujo `Build Afrogo FM`. Comprueba que `android-debug` termine en verde. Si falla, comparte el log completo de ese paso.

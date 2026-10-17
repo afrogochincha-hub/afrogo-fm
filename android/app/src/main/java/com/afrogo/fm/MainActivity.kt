@@ -297,8 +297,8 @@ class MainActivity : Activity() {
         miniPlayer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(6), dp(8), dp(6))
-            background = roundedSurface(Color.rgb(48, 29, 62), dp(10), Color.rgb(75, 48, 93))
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = android.graphics.drawable.ColorDrawable(Color.rgb(48, 29, 62))
             visibility = View.GONE
             isClickable = true
             setOnClickListener { showPlayerScreen() }
@@ -308,7 +308,7 @@ class MainActivity : Activity() {
             background = roundedSurface(accentColor, dp(5), accentColor)
             contentDescription = "Portada de la canción actual"
         }
-        miniPlayer.addView(miniPlayerCover, LinearLayout.LayoutParams(dp(46), dp(46)).apply { rightMargin = dp(10) })
+        miniPlayer.addView(miniPlayerCover, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(9) })
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
         miniPlayerTitle = TextView(this).apply {
             text = "AfroGo FM"; textSize = 13f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
@@ -325,7 +325,7 @@ class MainActivity : Activity() {
             if (player == null) connectMediaController()
             else if (player.isPlaying) player.pause() else player.play()
         }
-        miniPlayer.addView(miniPlayerPlayButton, centeredSize(dp(42), dp(44)))
+        miniPlayer.addView(miniPlayerPlayButton, centeredSize(dp(38), dp(42)))
     }
 
     private fun buildBottomNavigation() {
@@ -338,9 +338,7 @@ class MainActivity : Activity() {
         val items = listOf(
             Triple("home", "⌂", "Inicio"),
             Triple("search", "⌕", "Buscar"),
-            Triple("library", "▤", "Biblioteca"),
-            Triple("premium", "◉", "AfroGo+"),
-            Triple("create", "+", "Crear")
+            Triple("library", "▤", "Biblioteca")
         )
         items.forEach { (key, icon, label) ->
             val item = LinearLayout(this).apply {
@@ -462,11 +460,13 @@ class MainActivity : Activity() {
         content.addView(header, fullWidth().apply { bottomMargin = dp(14) })
 
         detachFromParent(searchBar)
-        searchBar.visibility = if (AfrogoApi.savedToken(this).isNotBlank()) View.VISIBLE else View.GONE
-        if (searchBar.visibility == View.VISIBLE) {
-            content.addView(searchBar, fullWidth().apply { bottomMargin = dp(20) })
-        } else {
-            content.addView(button("Inicia sesión para buscar en tu biblioteca", false) { showLoginHint() }, fullWidth().apply { bottomMargin = dp(20) })
+        searchBar.visibility = View.VISIBLE
+        content.addView(searchBar, fullWidth().apply { bottomMargin = dp(16) })
+        if (catalogTracks.isEmpty() && AfrogoApi.savedToken(this).isBlank()) {
+            content.addView(TextView(this).apply {
+                text = "Inicia sesión para cargar el catálogo musical completo."
+                textSize = 12f; setTextColor(mutedColor); setPadding(dp(2), 0, dp(2), dp(12))
+            }, fullWidth())
         }
 
         addSectionHeading(content, "Explora", "Accesos rápidos")
@@ -476,7 +476,7 @@ class MainActivity : Activity() {
         firstRow.addView(categoryTile("Favoritos", "Lo que te gusta", Color.rgb(45, 98, 63)) { catalogMode = "favorites"; showLibrary() }, LinearLayout.LayoutParams(0, dp(92), 1f))
         categories.addView(firstRow, fullWidth().apply { bottomMargin = dp(8) })
         val secondRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        secondRow.addView(categoryTile("Playlists", "Tus listas", Color.rgb(38, 70, 145)) { showPlaylistsDialog() }, LinearLayout.LayoutParams(0, dp(92), 1f).apply { rightMargin = dp(8) })
+        secondRow.addView(categoryTile("Playlists", "Tus listas", Color.rgb(38, 70, 145)) { showPlaylistsScreen() }, LinearLayout.LayoutParams(0, dp(92), 1f).apply { rightMargin = dp(8) })
         secondRow.addView(categoryTile("En directo", "AfroGo FM", Color.rgb(112, 18, 190)) { toggleRadio() }, LinearLayout.LayoutParams(0, dp(92), 1f))
         categories.addView(secondRow, fullWidth().apply { bottomMargin = dp(23) })
         content.addView(categories, fullWidth())
@@ -508,7 +508,7 @@ class MainActivity : Activity() {
         filterRow.addView(chip("Artistas", catalogMode == "artists" || catalogMode == "artist") { catalogMode = "artists"; selectedArtist = ""; activePlaylistId = ""; renderCatalogTracks() }, wrapParams().apply { rightMargin = dp(7) })
         filterRow.addView(chip("Canciones", catalogMode == "all") { catalogMode = "all"; selectedArtist = ""; activePlaylistId = ""; renderCatalogTracks() }, wrapParams().apply { rightMargin = dp(7) })
         filterRow.addView(chip("Favoritos", catalogMode == "favorites") { catalogMode = "favorites"; renderCatalogTracks() }, wrapParams().apply { rightMargin = dp(7) })
-        filterRow.addView(chip("Playlists", catalogMode == "playlist") { showPlaylistsDialog() }, wrapParams())
+        filterRow.addView(chip("Playlists", catalogMode == "playlist") { showPlaylistsScreen() }, wrapParams())
         filters.addView(filterRow)
         content.addView(filters, fullWidth().apply { bottomMargin = dp(22) })
 
@@ -551,6 +551,8 @@ class MainActivity : Activity() {
 
     private fun showPlayerScreen() {
         val content = prepareScreen("player")
+        content.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.rgb(64, 38, 72), Color.rgb(24, 20, 25), bgColor))
         val current = controller?.currentMediaItem
         val metadata = current?.mediaMetadata
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -1033,16 +1035,54 @@ class MainActivity : Activity() {
             .setNegativeButton("Cancelar", null).show()
     }
 
-    private fun showPlaylistsDialog() {
-        if (userPlaylists.isEmpty()) { createCloudPlaylist(null); return }
-        val names = userPlaylists.map { "${it.optString("name", "Playlist")} · ${(it.optJSONArray("songIds")?.length() ?: 0)} canciones" }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Tus playlists en la nube")
-            .setItems(names) { _, which ->
-                val playlist = userPlaylists.getOrNull(which) ?: return@setItems
-                catalogMode = "playlist"; activePlaylistId = playlist.optString("id"); catalogSearchInput.setText(""); renderCatalogTracks()
+    private fun showPlaylistsDialog() = showPlaylistsScreen()
+
+    private fun showPlaylistsScreen() {
+        val content = prepareScreen("playlists")
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        header.addView(button("‹", false) { showLibrary() }, centeredSize(dp(42), dp(42)))
+        header.addView(TextView(this).apply {
+            text = "Playlists"; textSize = 25f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(8) })
+        header.addView(button("＋", true) { createCloudPlaylist(null) }, centeredSize(dp(44), dp(44)))
+        content.addView(header, fullWidth().apply { bottomMargin = dp(8) })
+        content.addView(TextView(this).apply {
+            text = "Tus listas con portada y canciones"; textSize = 12f; setTextColor(mutedColor)
+        }, fullWidth().apply { bottomMargin = dp(18) })
+        if (userPlaylists.isEmpty()) {
+            content.addView(coloredFeatureCard("Aún no tienes playlists", "Crea una lista y añade canciones de la biblioteca AfroGo.", "Crear playlist") { createCloudPlaylist(null) }, fullWidth())
+            return
+        }
+        userPlaylists.forEach { playlist ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(10), dp(10), dp(10))
+                background = roundedSurface(Color.rgb(30, 28, 33), dp(12), Color.rgb(49, 44, 54))
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    catalogMode = "playlist"; activePlaylistId = playlist.optString("id")
+                    catalogSearchInput.setText(""); showLibrary()
+                }
             }
-            .setNeutralButton("＋ Crear playlist") { _, _ -> createCloudPlaylist(null) }
-            .setNegativeButton("Cancelar", null).show()
+            val cover = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(accentColor, Color.rgb(42, 18, 58))).apply { cornerRadius = dp(8).toFloat() }
+                contentDescription = "Portada de ${playlist.optString("name", "Playlist")}"
+            }
+            row.addView(cover, LinearLayout.LayoutParams(dp(76), dp(76)).apply { rightMargin = dp(12) })
+            val coverUrl = playlist.optString("cover", "")
+            if (coverUrl.isNotBlank()) loadCoverInto(coverUrl, cover) else cover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+            val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
+            labels.addView(TextView(this).apply {
+                text = playlist.optString("name", "Playlist"); textSize = 15f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+            })
+            labels.addView(TextView(this).apply {
+                text = "${playlist.optJSONArray("songIds")?.length() ?: 0} canciones"; textSize = 12f; setTextColor(mutedColor); setPadding(0, dp(4), 0, 0)
+            })
+            row.addView(labels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(TextView(this).apply { text = "›"; textSize = 28f; setTextColor(Color.WHITE) }, centeredSize(dp(24), dp(42)))
+            content.addView(row, fullWidth().apply { bottomMargin = dp(9) })
+        }
     }
 
     private fun createCloudPlaylist(track: AfrogoTrack?) {
@@ -1099,7 +1139,25 @@ class MainActivity : Activity() {
             val loaded = bitmap
             if (loaded != null) {
                 coverCache.put(url, loaded)
-                runOnUiThread { if (image.tag == url) image.setImageBitmap(loaded) }
+                runOnUiThread {
+                    if (image.tag == url) {
+                        image.setImageBitmap(loaded)
+                        val sample = Bitmap.createScaledBitmap(loaded, 1, 1, true)
+                        val pixel = sample.getPixel(0, 0)
+                        val r = (Color.red(pixel) * 0.52f).toInt().coerceIn(10, 100)
+                        val g = (Color.green(pixel) * 0.52f).toInt().coerceIn(10, 90)
+                        val b = (Color.blue(pixel) * 0.58f).toInt().coerceIn(15, 115)
+                        val dynamicColor = Color.rgb(r, g, b)
+                        if (::miniPlayerCover.isInitialized && image === miniPlayerCover) {
+                            miniPlayer.background = android.graphics.drawable.ColorDrawable(dynamicColor)
+                        }
+                        if (image.contentDescription?.toString() == "Portada de la reproducción actual") {
+                            (image.parent as? View)?.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                                intArrayOf(dynamicColor, darken(dynamicColor), bgColor))
+                        }
+                        sample.recycle()
+                    }
+                }
             }
         }
     }
@@ -1215,6 +1273,7 @@ class MainActivity : Activity() {
                 } else {
                     miniPlayerCover.tag = "afrogo-default"
                     miniPlayerCover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+                    miniPlayer.background = android.graphics.drawable.ColorDrawable(Color.rgb(48, 29, 62))
                 }
             }
         }

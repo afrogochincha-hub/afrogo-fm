@@ -1,0 +1,15 @@
+AFROGO FM ANDROID - AJUSTES DE INTERFAZ 1.9.1
+
+Cambios realizados sobre el código fuente entregado:
+- Mini reproductor inferior compacto con portada, título, artista y control de reproducción.
+- Color del mini reproductor derivado de la portada de la canción, con tono oscurecido para mantener contraste.
+- Fondo de la pantalla de reproducción con degradado y adaptación al color de portada cuando se carga.
+- Buscador accesible en la pantalla Buscar sin exigir que el usuario marque canciones como favoritas. Los resultados se filtran por título, artista, álbum y género en el catálogo cargado.
+- Sección Playlists como pantalla propia con portada, nombre y cantidad de canciones.
+- Barra de navegación inferior simplificada a Inicio, Buscar y Biblioteca; se retiraron AfroGo+ y Crear de esa barra. Crear playlist permanece disponible desde la pantalla Playlists.
+
+Verificación realizada:
+- `npm run check` del backend: 5 pruebas aprobadas.
+- No fue posible compilar Kotlin en este entorno: no se encontró Gradle ni gradlew local. La compilación Android debe confirmarse con GitHub Actions.
+
+Nota: la búsqueda muestra las canciones presentes en el catálogo que devuelve el backend/AzuraCast. Para ver el catálogo completo, la sesión debe estar activa y la carga de catálogo debe completarse correctamente.
