@@ -546,15 +546,16 @@ class MainActivity : Activity() {
         mainContent.addView(coloredFeatureCard("AFROGO FM", "Radio oficial · Música en vivo", "▶ Escuchar") { toggleRadio() },
             fullWidth().apply { bottomMargin = dp(18) })
 
-        mainScroll.addView(mainContent, ScrollView.LayoutParams(
-            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        mainScroll.addView(mainContent, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
         wideRoot.addView(mainScroll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         screenHost.addView(wideRoot, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ))
     }
-\n    private fun showSearch() {
+
+    private fun showSearch() {
         val content = prepareScreen("search")
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(brandAvatar(38), LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(10) })
