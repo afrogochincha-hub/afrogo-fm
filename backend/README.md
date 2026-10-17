@@ -18,3 +18,12 @@ Este servicio conecta la app PC y Android/Android Auto con el catálogo de Azura
 5. Verifica `GET /health` y después inicia sesión y prueba `GET /api/catalog`.
 
 No compartas `.env` ni lo subas a GitHub. La API Key que aparece en una captura compartida debe rotarse antes del despliegue.
+
+
+## Sesiones persistentes
+
+- `POST /api/auth/login` devuelve `token`, `refreshToken`, `expiresIn`, `refreshExpiresIn` y `user`.
+- `POST /api/auth/refresh` acepta `{ "refreshToken": "..." }` y devuelve un token de acceso y un refresh token rotado.
+- Los access tokens viven 7 días; los refresh tokens viven 365 días y se renuevan al iniciar o revalidar una sesión.
+- La app de escritorio cifra la sesión persistida mediante Electron safeStorage; Android usa almacenamiento privado de aplicación.
+- Cerrar sesión elimina los tokens guardados en el dispositivo. Para protección de una cuenta en un dispositivo compartido, siempre se debe usar el botón **Cerrar sesión**.

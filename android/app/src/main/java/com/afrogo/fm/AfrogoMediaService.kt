@@ -90,8 +90,13 @@ class AfrogoMediaService : MediaLibraryService() {
         if (token.isBlank()) return emptyList()
         val now = System.currentTimeMillis()
         if (!force && token == cachedToken && now - cachedAt < 60_000L) return cachedTracks
-        val tracks = AfrogoApi.catalog(token)
-        cachedToken = token
+        val tracks = try {
+            AfrogoApi.catalog(token)
+        } catch (e: AfrogoApiException) {
+            if (e.statusCode != 401 || AfrogoApi.savedRefreshToken(this).isBlank()) throw e
+            AfrogoApi.catalog(AfrogoApi.refreshSavedSession(this))
+        }
+        cachedToken = AfrogoApi.savedToken(this)
         cachedAt = now
         cachedTracks = tracks
         return tracks
@@ -101,7 +106,13 @@ class AfrogoMediaService : MediaLibraryService() {
         val token = AfrogoApi.savedToken(this)
         if (token.isBlank()) return JSONObject()
         if (!force && token == cachedToken && System.currentTimeMillis() - cachedLibraryAt < 15_000L) return cachedLibrary ?: JSONObject()
-        val data = AfrogoApi.library(token)
+        val data = try {
+            AfrogoApi.library(token)
+        } catch (e: AfrogoApiException) {
+            if (e.statusCode != 401 || AfrogoApi.savedRefreshToken(this).isBlank()) throw e
+            AfrogoApi.library(AfrogoApi.refreshSavedSession(this))
+        }
+        cachedToken = AfrogoApi.savedToken(this)
         cachedLibrary = data
         cachedLibraryAt = System.currentTimeMillis()
         return data

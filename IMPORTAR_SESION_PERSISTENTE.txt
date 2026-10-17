@@ -1,0 +1,10 @@
+AFROGO FM — SESIÓN PERSISTENTE
+
+1) Actualiza primero el gateway de Oracle con afrogo_gateway_sesion_persistente_v1_3.zip. No reemplaces .env y no borres el volumen afrogo-users.
+2) Para el repositorio, descarga el ZIP de parche y extrae todo. Copia las carpetas desktop, android, backend y docs dentro de la carpeta local afrogo-fm; acepta combinar y reemplazar. No copies archivos .env reales ni carpetas de datos.
+3) En GitHub Desktop, Commit to main y Push origin.
+4) En GitHub Actions, espera a que backend-check, windows-desktop y android-debug terminen en verde.
+5) Descarga e instala el nuevo EXE y APK. Inicia sesión una vez después de actualizar el gateway.
+6) Cierra y abre Afrogo: la sesión debe seguir activa. Usa el botón Cerrar sesión solo cuando quieras salir de la cuenta en ese dispositivo.
+
+El ZIP no incluye secretos, .env ni datos reales de usuarios.

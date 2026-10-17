@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, net, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -35,6 +35,37 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'afrogo-media', privileges: { st
 const allowedExt = new Set(['.mp3','.m4a','.ogg','.wav','.flac','.aac','.opus']);
 const libraryDir = () => path.join(app.getPath('userData'), 'library');
 const dbPath = () => path.join(libraryDir(), 'library.json');
+
+const authSessionPath = () => path.join(app.getPath('userData'), 'auth-session.enc');
+async function readEncryptedAuthSession() {
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  try {
+    const encrypted = await fsp.readFile(authSessionPath());
+    const parsed = JSON.parse(safeStorage.decryptString(encrypted));
+    if (!parsed || typeof parsed.token !== 'string' || !parsed.token || !parsed.user || typeof parsed.user !== 'object') return null;
+    return { token: parsed.token, refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : '', user: parsed.user };
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.warn('[Afrogo FM] No se pudo leer la sesión guardada:', error.message);
+    return null;
+  }
+}
+async function writeEncryptedAuthSession(session) {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('El sistema no tiene almacenamiento cifrado disponible; la sesión no se guardó en disco.');
+  if (!session || typeof session.token !== 'string' || !session.token || !session.user || typeof session.user !== 'object') throw new Error('Datos de sesión inválidos.');
+  const encrypted = safeStorage.encryptString(JSON.stringify({ token: session.token, refreshToken: String(session.refreshToken || ''), user: session.user }));
+  const target = authSessionPath();
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  const temp = target + '.tmp';
+  await fsp.writeFile(temp, encrypted);
+  await fsp.rename(temp, target);
+  return true;
+}
+async function removeAuthSession() {
+  try { await fsp.unlink(authSessionPath()); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  try { await fsp.unlink(authSessionPath() + '.tmp'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  return true;
+}
+
 async function readLibrary() {
   try { return JSON.parse(await fsp.readFile(dbPath(), 'utf8')); }
   catch (e) { if (e.code === 'ENOENT') return []; throw e; }
@@ -287,6 +318,9 @@ async function updateTrack(_event, input) {
 }
 
 app.whenReady().then(async () => {
+  ipcMain.handle('auth-session:load', async () => readEncryptedAuthSession());
+  ipcMain.handle('auth-session:save', async (_event, session) => writeEncryptedAuthSession(session));
+  ipcMain.handle('auth-session:clear', async () => removeAuthSession());
   await fsp.mkdir(libraryDir(), { recursive: true });
   protocol.handle('afrogo-media', async (request) => {
     try {

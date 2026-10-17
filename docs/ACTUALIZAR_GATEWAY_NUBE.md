@@ -1,6 +1,6 @@
 # Actualizar el gateway de Afrogo para sincronización en la nube
 
-Este archivo contiene la versión 1.2.0 del gateway. No incluye `.env`, claves API, contraseñas ni datos de usuarios.
+Este archivo contiene la versión 1.3.0 del gateway. No incluye `.env`, claves API, contraseñas ni datos de usuarios.
 
 ## Importante
 
@@ -36,8 +36,12 @@ docker exec azuracast sh -lc 'curl -fsS --max-time 5 http://afrogo-api:8787/heal
 curl -fsS --resolve afrogochincha.duckdns.org:443:127.0.0.1 https://afrogochincha.duckdns.org/afrogo-api/health
 ```
 
-Las tres comprobaciones deben devolver JSON con `"ok":true` y versión `1.2.0`. Si `docker compose config -q` muestra un error, parar y no ejecutar `docker compose up`. No usar `docker compose down -v`.
+Las tres comprobaciones deben devolver JSON con `"ok":true` y versión `1.3.0`. Si `docker compose config -q` muestra un error, parar y no ejecutar `docker compose up`. No usar `docker compose down -v`.
 
 ## Qué se guarda en la nube
 
 Los endpoints `/api/me/library`, `/api/me/playlists`, `/api/me/favorites`, `/api/me/saved-tracks` y `/api/me/history` guardan playlists, favoritos/canciones guardadas e historial bajo el ID de la cuenta autenticada. Los datos se escriben en `/data/user-libraries.json` dentro del volumen persistente del gateway. Las rutas requieren usuario aprobado y HTTPS en producción.
+
+
+## Sesión persistente 1.3.0
+Esta versión añade `POST /api/auth/refresh`. Actualiza el gateway para que PC y Android puedan conservar sesión entre cierres, siempre que el usuario no pulse Cerrar sesión y la cuenta siga aprobada. Mantén el mismo `.env` y el volumen persistente; no uses `docker compose down -v`.

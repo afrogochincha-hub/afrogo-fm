@@ -64,6 +64,7 @@ class MainActivity : Activity() {
     private lateinit var radioButton: Button
     private lateinit var signInButton: Button
     private lateinit var registerButton: Button
+    private lateinit var logoutButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,8 +141,10 @@ class MainActivity : Activity() {
 
         signInButton = button("Iniciar sesión", true) { authenticate(register = false) }
         registerButton = button("Solicitar acceso", false) { authenticate(register = true) }
+        logoutButton = button("Cerrar sesión", false) { logout() }.apply { visibility = View.GONE }
         page.addView(signInButton, fullWidth().apply { bottomMargin = dp(8) })
         page.addView(registerButton, fullWidth().apply { bottomMargin = dp(8) })
+        page.addView(logoutButton, fullWidth().apply { bottomMargin = dp(8) })
         authStatus = TextView(this).apply {
             text = "El acceso a la biblioteca requiere una cuenta aprobada y un gateway HTTPS configurado."
             textSize = 13f; setTextColor(Color.rgb(190, 177, 200)); gravity = Gravity.CENTER
@@ -192,22 +195,71 @@ class MainActivity : Activity() {
         connectMediaController()
         val saved = AfrogoApi.savedToken(this)
         if (saved.isNotBlank()) {
+            setAuthenticatedUi(true)
             authStatus.text = "Sesión guardada. Verificando acceso…"
             Thread {
                 try {
-                    val me = AfrogoApi.me(saved).optJSONObject("user")
+                    val refresh = AfrogoApi.savedRefreshToken(this)
+                    val refreshed = if (refresh.isNotBlank()) AfrogoApi.refresh(refresh) else AfrogoApi.upgradeLegacySession(saved)
+                    val newAccess = refreshed.optString("token", "")
+                    val newRefresh = refreshed.optString("refreshToken", "")
+                    if (newAccess.isBlank() || newRefresh.isBlank()) throw IllegalStateException("El servidor no devolvió una sesión renovada válida.")
+                    AfrogoApi.saveTokens(this, newAccess, newRefresh)
+                    val me = refreshed.optJSONObject("user")
                     runOnUiThread {
+                        setAuthenticatedUi(true)
                         authStatus.text = "Sesión activa: ${me?.optString("email", "cuenta Afrogo") ?: "cuenta Afrogo"}"
                         loadCatalog()
                     }
                 } catch (e: Exception) {
-                    AfrogoApi.clearToken(this)
-                    runOnUiThread { authStatus.text = "La sesión venció o no pudo validarse. Inicia sesión de nuevo." }
+                    val authRejected = e is AfrogoApiException && (e.statusCode == 401 || e.statusCode == 403)
+                    if (authRejected) AfrogoApi.clearToken(this)
+                    runOnUiThread {
+                        if (authRejected) {
+                            setAuthenticatedUi(false)
+                            authStatus.text = "La sesión venció o la cuenta ya no tiene acceso. Inicia sesión de nuevo."
+                            renderCatalogMessage("Inicia sesión con una cuenta aprobada para acceder a las canciones del servidor.")
+                        } else {
+                            // A timeout or server outage must not log the user out. Keep the saved token.
+                            setAuthenticatedUi(true)
+                            authStatus.text = "No se pudo verificar el servidor. Tu sesión sigue guardada; comprueba la conexión y pulsa Actualizar."
+                            catalogSummary.text = "Sesión conservada en este dispositivo."
+                            renderCatalogMessage("No hay conexión con el catálogo ahora. Tu sesión sigue guardada.")
+                        }
+                    }
                 }
             }.start()
         } else {
+            setAuthenticatedUi(false)
             renderCatalogMessage("Inicia sesión con una cuenta aprobada para acceder a las canciones del servidor.")
         }
+    }
+
+    private fun setAuthenticatedUi(signedIn: Boolean) {
+        val formVisibility = if (signedIn) View.GONE else View.VISIBLE
+        nameInput.visibility = formVisibility
+        emailInput.visibility = formVisibility
+        passwordInput.visibility = formVisibility
+        signInButton.visibility = formVisibility
+        registerButton.visibility = formVisibility
+        logoutButton.visibility = if (signedIn) View.VISIBLE else View.GONE
+    }
+
+    private fun logout() {
+        AfrogoApi.clearToken(this)
+        controller?.stop()
+        controller?.clearMediaItems()
+        catalogTracks = emptyList()
+        favoriteTrackIds.clear()
+        userPlaylists.clear()
+        catalogMode = "all"
+        activePlaylistId = ""
+        authStatus.text = "Has cerrado sesión. Tus datos en la nube se conservan en tu cuenta."
+        playbackStatus.text = "Sesión cerrada."
+        setAuthenticatedUi(false)
+        catalogSummary.text = "Inicia sesión para explorar las canciones."
+        renderCatalogMessage("Inicia sesión con una cuenta aprobada para acceder a la biblioteca.")
+        radioButton.text = "▶  Escuchar Afrogo FM en vivo"
     }
 
     private fun authenticate(register: Boolean) {
@@ -229,8 +281,9 @@ class MainActivity : Activity() {
                     val result = AfrogoApi.login(email, password)
                     val token = result.optString("token", "")
                     if (token.isBlank()) throw IllegalStateException("El servidor no devolvió una sesión válida.")
-                    AfrogoApi.saveToken(this, token)
-                    runOnUiThread { authStatus.text = "Sesión iniciada. Descargando biblioteca central…"; loadCatalog() }
+                    val refreshToken = result.optString("refreshToken", "")
+                    AfrogoApi.saveTokens(this, token, refreshToken)
+                    runOnUiThread { setAuthenticatedUi(true); authStatus.text = "Sesión iniciada. Descargando biblioteca central…"; loadCatalog() }
                 }
             } catch (e: Exception) {
                 runOnUiThread { authStatus.text = e.message ?: "No se pudo conectar con el servidor de Afrogo." }
@@ -254,8 +307,14 @@ class MainActivity : Activity() {
         renderCatalogMessage("Consultando AzuraCast…")
         Thread {
             try {
-                val tracks = AfrogoApi.catalog(token)
-                val cloudLibrary = try { AfrogoApi.library(token) } catch (_: Exception) { JSONObject() }
+                val tracks = try {
+                    AfrogoApi.catalog(token)
+                } catch (e: AfrogoApiException) {
+                    if (e.statusCode != 401 || AfrogoApi.savedRefreshToken(this).isBlank()) throw e
+                    AfrogoApi.catalog(AfrogoApi.refreshSavedSession(this))
+                }
+                val currentToken = AfrogoApi.savedToken(this)
+                val cloudLibrary = try { AfrogoApi.library(currentToken) } catch (_: Exception) { JSONObject() }
                 val favoritesJson = cloudLibrary.optJSONArray("favorites") ?: JSONArray()
                 val playlistJson = cloudLibrary.optJSONArray("playlists") ?: JSONArray()
                 val favorites = linkedSetOf<String>()

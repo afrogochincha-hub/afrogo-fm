@@ -20,13 +20,21 @@ data class AfrogoTrack(
     val playUrl: String
 )
 
+class AfrogoApiException(val statusCode: Int, message: String) : IllegalStateException(message)
+
 object AfrogoApi {
     private const val PREFS = "afrogo_auth"
     private const val TOKEN_KEY = "token"
+    private const val REFRESH_TOKEN_KEY = "refresh_token"
 
     fun savedToken(context: Context): String = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(TOKEN_KEY, "") ?: ""
+    fun savedRefreshToken(context: Context): String = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(REFRESH_TOKEN_KEY, "") ?: ""
     fun saveToken(context: Context, token: String) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(TOKEN_KEY, token).apply() }
-    fun clearToken(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(TOKEN_KEY).apply() }
+    fun saveTokens(context: Context, token: String, refreshToken: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(TOKEN_KEY, token).putString(REFRESH_TOKEN_KEY, refreshToken).apply()
+    }
+    fun clearToken(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(TOKEN_KEY).remove(REFRESH_TOKEN_KEY).apply() }
 
     private fun request(path: String, method: String = "GET", body: JSONObject? = null, token: String? = null): JSONObject {
         val base = AzuraConfig.API_BASE_URL
@@ -49,7 +57,7 @@ object AfrogoApi {
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { reader -> reader.readText() } } ?: "{}"
             val result = try { JSONObject(text) } catch (_: Exception) { JSONObject() }
-            if (code !in 200..299) throw IllegalStateException(result.optString("error", "Error de servidor ($code)."))
+            if (code !in 200..299) throw AfrogoApiException(code, result.optString("error", "Error de servidor ($code)."))
             return result
         } finally { conn.disconnect() }
     }
@@ -63,6 +71,25 @@ object AfrogoApi {
     )
 
     fun me(token: String): JSONObject = request("/api/auth/me", token = token)
+
+    fun refresh(refreshToken: String): JSONObject = request(
+        "/api/auth/refresh", "POST", JSONObject().put("refreshToken", refreshToken)
+    )
+
+    fun upgradeLegacySession(accessToken: String): JSONObject = request(
+        "/api/auth/refresh", "POST", JSONObject().put("token", accessToken)
+    )
+
+    fun refreshSavedSession(context: Context): String {
+        val oldRefresh = savedRefreshToken(context)
+        if (oldRefresh.isBlank()) throw IllegalStateException("No hay una sesión renovable guardada.")
+        val result = refresh(oldRefresh)
+        val access = result.optString("token", "")
+        val refresh = result.optString("refreshToken", "")
+        if (access.isBlank() || refresh.isBlank()) throw IllegalStateException("El servidor no devolvió una sesión renovada válida.")
+        saveTokens(context, access, refresh)
+        return access
+    }
 
     /** Biblioteca personal sincronizada en la nube y aislada por la cuenta autenticada. */
     fun library(token: String): JSONObject = request("/api/me/library", token = token)

@@ -13,6 +13,9 @@ const allowInsecureHttp = readArgument('--afrogo-allow-insecure-http=') === '1' 
 
 contextBridge.exposeInMainWorld('afrogo', {
   config: { apiBaseUrl: configuredApiBaseUrl, allowInsecureHttp },
+  loadAuthSession: () => ipcRenderer.invoke('auth-session:load'),
+  saveAuthSession: (session) => ipcRenderer.invoke('auth-session:save', session),
+  clearAuthSession: () => ipcRenderer.invoke('auth-session:clear'),
   listTracks: () => ipcRenderer.invoke('library:list'),
   saveTrack: (track) => ipcRenderer.invoke('library:save', track),
   updateTrack: (input) => ipcRenderer.invoke('library:update', input),

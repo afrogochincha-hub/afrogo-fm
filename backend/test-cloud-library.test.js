@@ -48,8 +48,26 @@ test('personal library persists playlists, favorites and history separately by a
     body: JSON.stringify({ email: 'cloud-test@example.com', password: 'test-password-very-secure-2026' })
   });
   assert.equal(login.status, 200);
-  const { token } = await login.json();
-  const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+  const loginData = await login.json();
+  const { token, refreshToken } = loginData;
+  assert.ok(refreshToken, 'login should issue a persistent refresh token');
+  assert.ok(loginData.refreshExpiresIn >= 30 * 24 * 60 * 60, 'refresh token should last beyond app restarts');
+  const refreshed = await fetch(`${base}/api/auth/refresh`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ refreshToken })
+  });
+  assert.equal(refreshed.status, 200);
+  const refreshedData = await refreshed.json();
+  assert.ok(refreshedData.token);
+  assert.ok(refreshedData.refreshToken);
+  const legacyUpgrade = await fetch(`${base}/api/auth/refresh`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: refreshedData.token })
+  });
+  assert.equal(legacyUpgrade.status, 200, 'old installed apps can upgrade an existing valid access token');
+  const legacyUpgradeData = await legacyUpgrade.json();
+  assert.ok(legacyUpgradeData.refreshToken);
+  const headers = { authorization: `Bearer ${legacyUpgradeData.token}`, 'content-type': 'application/json' };
   const getLibrary = () => fetch(`${base}/api/me/library`, { headers });
   let response = await getLibrary();
   assert.equal(response.status, 200);

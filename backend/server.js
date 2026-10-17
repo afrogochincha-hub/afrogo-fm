@@ -31,7 +31,8 @@ const LIBRARIES_FILE = path.join(DATA_DIR, 'user-libraries.json');
 const JWT_SECRET = String(process.env.JWT_SECRET || '');
 const ADMIN_EMAIL = String(process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.BOOTSTRAP_ADMIN_PASSWORD || '');
-const TOKEN_LIFETIME_SECONDS = 12 * 60 * 60;
+const TOKEN_LIFETIME_SECONDS = 7 * 24 * 60 * 60; // Access token: 7 días
+const REFRESH_TOKEN_LIFETIME_SECONDS = 365 * 24 * 60 * 60; // Sesión persistente renovable: 1 año, con renovación deslizante
 const MEDIA_TICKET_SECONDS = 4 * 60 * 60;
 const MAX_BODY = 8 * 1024 * 1024; // Permite portadas de playlist en data URI, con límite por usuario.
 
@@ -393,7 +394,7 @@ async function handle(req, res) {
   const pathname = decodeURIComponent(parsed.pathname);
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' }); return res.end(); }
   if (req.method === 'GET' && pathname === '/health') return json(res, 200, {
-    ok: true, service: 'afrogo-azuracast-gateway', version: '1.2.0',
+    ok: true, service: 'afrogo-azuracast-gateway', version: '1.3.0',
     azuracastConfigured: Boolean(AZURA_BASE && STATION_ID && AZURA_KEY),
     stationConfigured: Boolean(STATION_ID), httpsRequiredInProduction: true,
   });
@@ -424,7 +425,23 @@ async function handle(req, res) {
     if (user.status === 'pending') return json(res, 403, { error: 'Tu solicitud está pendiente de aprobación.' });
     if (user.status !== 'approved') return json(res, 403, { error: 'Esta cuenta no tiene acceso activo.' });
     const token = signToken({ kind: 'user', sub: user.id, role: user.role }, TOKEN_LIFETIME_SECONDS);
-    return json(res, 200, { token, expiresIn: TOKEN_LIFETIME_SECONDS, user: safeUser(user) });
+    const refreshToken = signToken({ kind: 'refresh', sub: user.id, role: user.role }, REFRESH_TOKEN_LIFETIME_SECONDS);
+    return json(res, 200, { token, refreshToken, expiresIn: TOKEN_LIFETIME_SECONDS, refreshExpiresIn: REFRESH_TOKEN_LIFETIME_SECONDS, user: safeUser(user) });
+  }
+  if (req.method === 'POST' && pathname === '/api/auth/refresh') {
+    if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de renovar la sesión.' });
+    if (rateLimited(req, 'refresh')) return json(res, 429, { error: 'Demasiadas renovaciones. Inténtalo más tarde.' });
+    const input = await readJson(req);
+    const suppliedRefresh = String(input.refreshToken || '').trim();
+    const suppliedAccess = String(input.token || '').trim();
+    const payload = verifyToken(suppliedRefresh || suppliedAccess);
+    const tokenKindIsValid = suppliedRefresh ? payload?.kind === 'refresh' : (suppliedAccess && payload?.kind === 'user');
+    if (!payload || !tokenKindIsValid || !payload.sub) return json(res, 401, { error: 'La sesión guardada venció o no es válida. Inicia sesión de nuevo.' });
+    const user = users.find(u => u.id === payload.sub && u.status === 'approved');
+    if (!user) return json(res, 403, { error: 'Esta cuenta ya no tiene acceso activo.' });
+    const token = signToken({ kind: 'user', sub: user.id, role: user.role }, TOKEN_LIFETIME_SECONDS);
+    const refreshToken = signToken({ kind: 'refresh', sub: user.id, role: user.role }, REFRESH_TOKEN_LIFETIME_SECONDS);
+    return json(res, 200, { token, refreshToken, expiresIn: TOKEN_LIFETIME_SECONDS, refreshExpiresIn: REFRESH_TOKEN_LIFETIME_SECONDS, user: safeUser(user) });
   }
   if (req.method === 'GET' && pathname === '/api/auth/me') {
     if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de enviar tokens de sesión.' });

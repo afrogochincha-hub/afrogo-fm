@@ -133,9 +133,40 @@
 const $=id=>document.getElementById(id);
 let authMode='login', user=null, songs=[], currentId=null, favorites=(()=>{try{return new Set(JSON.parse(localStorage.getItem('afrogoFavorites')||'[]').map(String))}catch(e){return new Set()}})(), searchTerm='', activeView='home', shuffleEnabled=false, repeatMode=0, selectedGenre='', selectedAlbumKey='', playCounts={}, activeQueueIds=[]; // repetir: 0 apagado, 1 canción actual
 const AFROGO_API_BASE=String(window.afrogo?.config?.apiBaseUrl||'').replace(/\/+$/,'');
-let remoteSessionToken=null,remoteCatalogLoaded=false,remoteCatalogLoading=false;
+let remoteSessionToken=null,remoteRefreshToken=null,remoteCatalogLoaded=false,remoteCatalogLoading=false;
 let cloudLibraryReady=false,cloudWriteChain=Promise.resolve(),cloudSyncErrorShown=false,cloudMigrationBusy=false,cloudLastUpdatedAt=null,cloudRefreshInProgress=false;
-async function afrogoApi(path,options={}){if(!AFROGO_API_BASE)throw new Error('Falta configurar apiBaseUrl en desktop/app-config.json con la URL HTTPS del backend de Afrogo.');if(!/^https:\/\//i.test(AFROGO_API_BASE)&&!window.afrogo?.config?.allowInsecureHttp)throw new Error('El backend debe usar HTTPS. Solo en pruebas locales puedes activar AFROGO_ALLOW_INSECURE_HTTP=1.');const headers={...(options.headers||{})};if(options.body!==undefined)headers['Content-Type']='application/json';if(options.auth!==false&&remoteSessionToken&&!headers.Authorization)headers.Authorization='Bearer '+remoteSessionToken;const response=await fetch(AFROGO_API_BASE+path,{method:options.method||'GET',headers,body:options.body===undefined?undefined:JSON.stringify(options.body)});let data={};try{data=await response.json()}catch(_){}if(!response.ok)throw new Error(data.error||('Error del servidor ('+response.status+').'));return data;}
+async function persistAuthSession(){
+  if(!window.afrogo?.saveAuthSession||!remoteSessionToken||!user)return;
+  try{await window.afrogo.saveAuthSession({token:remoteSessionToken,refreshToken:remoteRefreshToken||'',user});}
+  catch(err){console.warn('La sesión sigue activa, pero no se pudo guardarla cifrada:',err);toast('No se pudo guardar la sesión cifrada en este equipo.');}
+}
+async function refreshRemoteSession(){
+  if(!AFROGO_API_BASE)throw new Error('Falta configurar la URL HTTPS del backend de Afrogo.');
+  if(!remoteRefreshToken&&!remoteSessionToken)throw new Error('No hay una sesión guardada.');
+  const refreshBody=remoteRefreshToken?{refreshToken:remoteRefreshToken}:{token:remoteSessionToken};
+  const response=await fetch(AFROGO_API_BASE+'/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(refreshBody)});
+  let data={};try{data=await response.json()}catch(_){}
+  if(!response.ok){const err=new Error(data.error||('No se pudo renovar la sesión ('+response.status+').'));err.status=response.status;throw err;}
+  if(!data.token||!data.refreshToken)throw new Error('El servidor no devolvió una sesión renovada válida.');
+  remoteSessionToken=data.token;remoteRefreshToken=data.refreshToken;if(data.user)user=data.user;
+  await persistAuthSession();
+  return data;
+}
+async function afrogoApi(path,options={}){
+  if(!AFROGO_API_BASE)throw new Error('Falta configurar apiBaseUrl en desktop/app-config.json con la URL HTTPS del backend de Afrogo.');
+  if(!/^https:\/\//i.test(AFROGO_API_BASE)&&!window.afrogo?.config?.allowInsecureHttp)throw new Error('El backend debe usar HTTPS. Solo en pruebas locales puedes activar AFROGO_ALLOW_INSECURE_HTTP=1.');
+  const opts={...options};
+  const makeRequest=()=>{const headers={...(opts.headers||{})};if(opts.body!==undefined&&!(opts.body instanceof FormData))headers['Content-Type']='application/json';if(opts.auth!==false&&remoteSessionToken&&!headers.Authorization)headers.Authorization='Bearer '+remoteSessionToken;return fetch(AFROGO_API_BASE+path,{method:opts.method||'GET',headers,body:opts.body===undefined?undefined:(opts.body instanceof FormData?opts.body:JSON.stringify(opts.body))});};
+  let response=await makeRequest();
+  if(response.status===401&&opts.auth!==false&&remoteRefreshToken&&path!=='/api/auth/refresh'){
+    await refreshRemoteSession();
+    if(opts.headers&&opts.headers.Authorization)opts.headers={...opts.headers,Authorization:'Bearer '+remoteSessionToken};
+    response=await makeRequest();
+  }
+  let data={};try{data=await response.json()}catch(_){}
+  if(!response.ok){const err=new Error(data.error||('Error del servidor ('+response.status+').'));err.status=response.status;throw err;}
+  return data;
+}
 async function loadAzuraCatalog(showToast=false){if(remoteCatalogLoading||!remoteSessionToken)return;remoteCatalogLoading=true;try{const data=await afrogoApi('/api/catalog');const remote=(data.items||[]).map(t=>{const genreInfo=t.genreSource?{genre:t.genre||'Sin categoría',source:t.genreSource,confidence:Number(t.genreConfidence)||0}:window.AfrogoGenreClassifier.classifyGenre(t.genre,{title:t.title,artist:t.artist,album:t.album,path:t.path});return {id:'azura:'+String(t.id),remoteId:String(t.id),remoteAzura:true,source:'azuracast',title:t.title||'Canción sin título',artist:t.artist||'Artista desconocido',album:t.album||'',genre:genreInfo.genre||'Sin categoría',genreSource:genreInfo.source,genreConfidence:genreInfo.confidence,duration:Number(t.duration)||0,trackNumber:Number(t.trackNumber)||0,discNumber:Number(t.discNumber)||0,path:t.path||'',cover:t.coverUrl||'',url:t.playUrl||'',emoji:'♫',addedAt:'',sourceLabel:'AzuraCast'};});songs=[...songs.filter(s=>!s.remoteAzura),...remote];remoteCatalogLoaded=true;if(activeView)renderView(activeView);if(showToast){const counts={Urbano:0,Reguetón:0,Salsa:0,Cumbia:0,Baladas:0,Electrónica:0};remote.forEach(s=>{for(const g of Object.keys(counts)){if(window.AfrogoGenreClassifier.matchesCategory(s.genre,g,{title:s.title,artist:s.artist,album:s.album,path:s.path})){counts[g]++;break;}}});toast('Catálogo actualizado: '+remote.length+' canciones · '+Object.entries(counts).filter(([,n])=>n).map(([g,n])=>g+': '+n).join(' · '));}}catch(err){console.error('AzuraCast catálogo:',err);if(showToast||!remoteCatalogLoaded)toast('No se pudo cargar la biblioteca central: '+err.message);}finally{remoteCatalogLoading=false;}}
 
 function localLibraryKey(kind){return user&&user.id?'afrogoUser:'+user.id+':'+kind:null;}
@@ -288,7 +319,8 @@ function bindAuthControls(){
        $('password').value='';$('displayName').value='';setAuthMode('login');toast(data.message||'Solicitud enviada. Espera la aprobación del administrador.');return;
      }
      const data=await afrogoApi('/api/auth/login',{method:'POST',auth:false,body:{email,password}});
-     remoteSessionToken=data.token;user=data.user;user.name=user.name||name;
+     remoteSessionToken=data.token;remoteRefreshToken=data.refreshToken||'';user=data.user;user.name=user.name||name;
+     await persistAuthSession();
      startApp();
    }catch(err){console.error('Autenticación central:',err);toast(err.message||'No se pudo conectar con el servidor de Afrogo.');}
    finally{submit.disabled=false;}
@@ -301,7 +333,7 @@ async function startApp(){try{await loadCloudLibraryForUser()}catch(err){cloudLi
 function closeProfileMenu(){$('profileMenu').classList.add('hidden');$('profileToggle').setAttribute('aria-expanded','false')}
 $('profileToggle').onclick=e=>{e.stopPropagation();const open=$('profileMenu').classList.toggle('hidden')===false;$('profileToggle').setAttribute('aria-expanded',String(open));$('searchHistory').classList.add('hidden')};
 $('profileMenu').addEventListener('click',e=>{const b=e.target.closest('[data-profile-view]');if(!b)return;closeProfileMenu();renderView(b.dataset.profileView)});
-$('logout').onclick=()=>{const liveRadio=$('afrogoRadioStream');if(liveRadio){liveRadio.pause();liveRadio.removeAttribute('src');liveRadio.dataset.streamUrl='';liveRadio.load();parkPersistentRadioAudio()}user=null;remoteSessionToken=null;remoteCatalogLoaded=false;cloudLibraryReady=false;userPlaylists=[];favorites=new Set();listeningHistory=[];songs=songs.filter(s=>!s.remoteAzura);audio.pause();closeProfileMenu();$('app').classList.add('hidden');$('auth').classList.remove('hidden');setAuthMode('login')};
+$('logout').onclick=async()=>{try{await window.afrogo?.clearAuthSession?.()}catch(err){console.warn('No se pudo borrar la sesión guardada:',err)}const liveRadio=$('afrogoRadioStream');if(liveRadio){liveRadio.pause();liveRadio.removeAttribute('src');liveRadio.dataset.streamUrl='';liveRadio.load();parkPersistentRadioAudio()}user=null;remoteSessionToken=null;remoteRefreshToken=null;remoteCatalogLoaded=false;cloudLibraryReady=false;userPlaylists=[];favorites=new Set();listeningHistory=[];songs=songs.filter(s=>!s.remoteAzura);audio.pause();closeProfileMenu();$('app').classList.add('hidden');$('auth').classList.remove('hidden');setAuthMode('login')};
 document.addEventListener('click',e=>{if(!e.target.closest('#profileWrap'))closeProfileMenu()});
 document.querySelectorAll('.navbtn[data-view]').forEach(b=>b.onclick=()=>renderView(b.dataset.view));
 const searchInput=$('globalSearch'), historyBox=$('searchHistory');
@@ -676,4 +708,25 @@ async function handleUploads(files){
  toast('Carga central finalizada: '+added+' subidas a AzuraCast, '+duplicates+' posibles duplicados omitidos'+(failed?', '+failed+' errores':'')+'.');
  const input=$('audioFiles');if(input)input.value='';
 }
+
+async function restoreSavedSession(){
+  if(!window.afrogo?.loadAuthSession)return;
+  let saved=null;try{saved=await window.afrogo.loadAuthSession()}catch(err){console.warn('No se pudo leer sesión local:',err)}
+  if(!saved||!saved.token||!saved.user)return;
+  remoteSessionToken=saved.token;remoteRefreshToken=saved.refreshToken||'';user=saved.user;
+  try{
+    const renewed=await refreshRemoteSession();
+    if(renewed.user)user=renewed.user;
+  }catch(err){
+    if(err.status===401||err.status===403){
+      try{await window.afrogo.clearAuthSession()}catch(_){}
+      remoteSessionToken=null;remoteRefreshToken=null;user=null;
+      toast('Tu sesión ya no es válida. Inicia sesión de nuevo.');return;
+    }
+    console.warn('No se pudo validar la sesión en línea; se conserva localmente:',err);
+    toast('No se pudo verificar el servidor. La sesión se conserva; revisa tu conexión.');
+  }
+  if(user)await startApp();
+}
+void restoreSavedSession();
 </script></body></html>
