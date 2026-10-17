@@ -84,6 +84,11 @@ class MainActivity : Activity() {
     private var landscapePlayerTitle: TextView? = null
     private var landscapePlayerArtist: TextView? = null
     private var landscapePlayerToggle: Button? = null
+    // References for the full-screen landscape player; these must be refreshed on Media3 events.
+    private var playerScreenCover: ImageView? = null
+    private var playerScreenTitle: TextView? = null
+    private var playerScreenArtist: TextView? = null
+    private var playerScreenToggle: Button? = null
     private val navLabels = linkedMapOf<String, TextView>()
     private var activeTab: String = "home"
     private var isRegistrationMode: Boolean = false
@@ -408,6 +413,10 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
+        playerScreenCover = null
+        playerScreenTitle = null
+        playerScreenArtist = null
+        playerScreenToggle = null
         if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
             showHomeLandscape()
             return
@@ -469,6 +478,10 @@ class MainActivity : Activity() {
      * Android Auto itself uses the MediaLibraryService UI supplied by the car host.
      */
     private fun showHomeLandscape() {
+        playerScreenCover = null
+        playerScreenTitle = null
+        playerScreenArtist = null
+        playerScreenToggle = null
         screenHost.removeAllViews()
         activeTab = "home"
         updateNavSelection()
@@ -865,9 +878,10 @@ class MainActivity : Activity() {
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = roundedSurface(accentColor, dp(8), accentColor)
-            contentDescription = "Portada de la canción actual"
+            contentDescription = "Portada de la reproducción actual"
             tag = artworkUrl
         }
+        playerScreenCover = cover
         val availableHeight = (resources.displayMetrics.heightPixels - dp(70)).coerceAtLeast(dp(150))
         val coverSize = (availableHeight - dp(16)).coerceAtMost(dp(300))
         coverColumn.addView(cover, LinearLayout.LayoutParams(coverSize, coverSize))
@@ -892,14 +906,18 @@ class MainActivity : Activity() {
         topRow.addView(button("⋮", false) { showCreateDialog() }, centeredSize(dp(42), dp(42)))
         panel.addView(topRow, fullWidth().apply { bottomMargin = dp(18) })
 
-        panel.addView(TextView(this).apply {
+        val playerTitleView = TextView(this).apply {
             text = titleText; textSize = 22f; maxLines = 2
             setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
-        }, fullWidth())
-        panel.addView(TextView(this).apply {
+        }
+        playerScreenTitle = playerTitleView
+        panel.addView(playerTitleView, fullWidth())
+        val playerArtistView = TextView(this).apply {
             text = artistText; textSize = 14f
             setTextColor(Color.rgb(205, 195, 214))
-        }, fullWidth().apply { topMargin = dp(5); bottomMargin = dp(16) })
+        }
+        playerScreenArtist = playerArtistView
+        panel.addView(playerArtistView, fullWidth().apply { topMargin = dp(5); bottomMargin = dp(16) })
 
         val progress = SeekBar(this).apply {
             max = 1000
@@ -936,11 +954,18 @@ class MainActivity : Activity() {
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         controls.addView(button("|◀", false) { controller?.seekToPreviousMediaItem() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        controls.addView(button(if (controller?.isPlaying == true) "Ⅱ" else "▶", true) {
+        val playerToggle = button(
+            if (controller?.isPlaying == true || controller?.playWhenReady == true) "Ⅱ" else "▶",
+            true
+        ) {
             val active = controller
-            if (active == null) connectMediaController() else if (active.isPlaying) active.pause() else active.play()
+            if (active == null) connectMediaController()
+            else if (active.isPlaying || active.playWhenReady) active.pause() else active.play()
+            // Media3 listener updates the icon after the actual player state changes.
             updatePlaybackUi()
-        }, centeredSize(dp(62), dp(58)))
+        }
+        playerScreenToggle = playerToggle
+        controls.addView(playerToggle, centeredSize(dp(62), dp(58)))
         controls.addView(button("▶|", false) { controller?.seekToNextMediaItem() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         panel.addView(controls, fullWidth().apply { topMargin = dp(6); bottomMargin = dp(12) })
         panel.addView(TextView(this).apply {
@@ -1722,8 +1747,23 @@ class MainActivity : Activity() {
                 miniPlayerPlayButton.text = if (playing) "Ⅱ" else "▶"
                 landscapePlayerTitle?.text = current?.title?.toString() ?: "AfroGo FM"
                 landscapePlayerArtist?.text = current?.artist?.toString() ?: "Radio en vivo"
-                landscapePlayerToggle?.text = if (playing || controller?.playWhenReady == true) "Ⅱ" else "▶"
+                val toggleLabel = if (playing || controller?.playWhenReady == true) "Ⅱ" else "▶"
+                landscapePlayerToggle?.text = toggleLabel
+                playerScreenToggle?.text = toggleLabel
+                playerScreenTitle?.text = current?.title?.toString()?.takeIf { it.isNotBlank() } ?: "AfroGo FM"
+                playerScreenArtist?.text = current?.artist?.toString()?.takeIf { it.isNotBlank() } ?: "Radio oficial · Música en vivo"
                 val coverUrl = current?.artworkUri?.toString().orEmpty()
+                val screenCover = playerScreenCover
+                if (screenCover != null) {
+                    if (coverUrl.isNotBlank() && screenCover.tag != coverUrl) {
+                        screenCover.tag = coverUrl
+                        screenCover.setImageDrawable(null)
+                        loadCoverInto(coverUrl, screenCover)
+                    } else if (coverUrl.isBlank() && screenCover.tag != "afrogo-default") {
+                        screenCover.tag = "afrogo-default"
+                        screenCover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+                    }
+                }
                 val landscapeCover = landscapePlayerCover
                 if (landscapeCover != null && coverUrl.isNotBlank() && landscapeCover.tag != coverUrl) {
                     landscapeCover.tag = coverUrl
