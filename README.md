@@ -67,3 +67,6 @@ Corrección Android 1.4.1: arregla las referencias de Media3/Guava y la firma de
 
 ## PC 3.24.0: reconocimiento visual de portadas
 La sección Álbumes compara visualmente las portadas y reúne pistas que usan la misma imagen, aunque los textos de artista/álbum tengan pequeñas diferencias. Cuando no puede analizarse una imagen por restricciones de acceso, se conserva el agrupamiento por metadatos.
+
+## Versión 3.28.0
+Incluye barra de búsqueda fija y suave; en PC el stream de radio se conserva al cambiar de sección porque el elemento de audio persiste fuera de la vista dinámica. Android usa el buscador fijo y Android Auto usa el servicio multimedia de Media3.

@@ -1,5 +1,8 @@
-# Icono oficial de Afrogo FM para Android y Android Auto
+# Icono oficial Afrogo FM
 
-Se incorporó la imagen oficial proporcionada por el usuario como icono del APK. El manifiesto apunta a `@mipmap/ic_launcher` y `@mipmap/ic_launcher_round`; Android Auto utiliza el icono de la aplicación instalada en el teléfono para identificarla en el selector compatible.
+El icono oficial enviado por el usuario se usa en las versiones Android y PC.
 
-Versión Android incrementada a 1.4.2 (versionCode 6). Para aplicar el cambio, copia el contenido de la carpeta `android/` a la carpeta `android/` de tu repositorio y sube los cambios con GitHub Desktop; luego espera el trabajo `android-debug` y descarga el APK recién compilado.
+- Android 1.5.0 (versionCode 7): mantiene el icono oficial y añade la búsqueda fija y resultados visuales.
+- PC 3.27.0: mantiene el icono oficial y añade búsqueda fija/resultados visuales.
+
+Para actualizar Android Auto, se debe compilar e instalar el APK Android actualizado; Android Auto utiliza el servicio multimedia de esa misma app.

@@ -77,10 +77,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(7), dp(10), dp(7))
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(29, 22, 36)); cornerRadius = dp(26).toFloat()
-                setStroke(dp(1), Color.rgb(76, 47, 94))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.argb(248, 34, 23, 43), Color.argb(222, 23, 16, 30))).apply {
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), Color.argb(150, 120, 65, 150))
             }
+            elevation = dp(12).toFloat()
             visibility = View.GONE
         }
         searchBar.addView(TextView(this).apply {
@@ -101,7 +103,7 @@ class MainActivity : Activity() {
             catalogSearchInput.clearFocus()
         }.apply { visibility = View.GONE; minWidth = dp(38) }
         searchBar.addView(searchClearButton, centeredSize(dp(42), dp(42)))
-        root.addView(searchBar, fullWidth().apply { leftMargin = dp(12); rightMargin = dp(12); topMargin = dp(10); bottomMargin = dp(4) })
+        root.addView(searchBar, fullWidth().apply { leftMargin = dp(12); rightMargin = dp(12); topMargin = dp(4); bottomMargin = dp(7) })
 
         val scroll = ScrollView(this).apply { isFillViewport = true; addView(page) }
         root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))

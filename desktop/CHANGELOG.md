@@ -57,3 +57,8 @@
 
 ## Pendiente antes de producción multiusuario
 La autenticación y las aprobaciones aún se guardan localmente. Se debe implementar y probar la API central de Afrogo con validación de roles en servidor antes de desplegar una experiencia de cuentas compartidas entre equipos.
+
+## 3.28.0
+- Barra de búsqueda fija arriba con degradado y desenfoque suave.
+- El stream de Afrogo FM persiste al navegar entre secciones y se vuelve a montar al regresar a Radio en vivo.
+- Reproducir una canción pausa la radio para evitar audio simultáneo; cerrar sesión también la detiene.

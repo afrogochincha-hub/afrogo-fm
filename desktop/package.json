@@ -1,7 +1,7 @@
 {
   "name": "afrogo-fm",
-  "version": "3.27.0",
-  "description": "Afrogo FM con búsqueda fija, resultados visuales y catálogo central AzuraCast",
+  "version": "3.28.0",
+  "description": "Afrogo FM con barra de búsqueda fija, radio persistente y catálogo central AzuraCast",
   "main": "main.js",
   "author": "Afrogo FM",
   "license": "UNLICENSED",
