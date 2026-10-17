@@ -89,6 +89,17 @@ class MainActivity : Activity() {
     private var playerScreenTitle: TextView? = null
     private var playerScreenArtist: TextView? = null
     private var playerScreenToggle: Button? = null
+    private var playerScreenProgress: SeekBar? = null
+    private var playerScreenElapsed: TextView? = null
+    private var playerScreenDuration: TextView? = null
+    private var isUserSeekingPlayerProgress: Boolean = false
+    private val playbackProgressHandler = Handler(Looper.getMainLooper())
+    private val playbackProgressTicker = object : Runnable {
+        override fun run() {
+            updatePlayerProgressUi()
+            playbackProgressHandler.postDelayed(this, 500L)
+        }
+    }
     private val navLabels = linkedMapOf<String, TextView>()
     private var activeTab: String = "home"
     private var isRegistrationMode: Boolean = false
@@ -100,6 +111,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        playbackProgressHandler.post(playbackProgressTicker)
         window.statusBarColor = bgColor
         window.navigationBarColor = bgColor
         window.decorView.systemUiVisibility = 0
@@ -417,6 +429,9 @@ class MainActivity : Activity() {
         playerScreenTitle = null
         playerScreenArtist = null
         playerScreenToggle = null
+        playerScreenProgress = null
+        playerScreenElapsed = null
+        playerScreenDuration = null
         if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
             showHomeLandscape()
             return
@@ -482,6 +497,9 @@ class MainActivity : Activity() {
         playerScreenTitle = null
         playerScreenArtist = null
         playerScreenToggle = null
+        playerScreenProgress = null
+        playerScreenElapsed = null
+        playerScreenDuration = null
         screenHost.removeAllViews()
         activeTab = "home"
         updateNavSelection()
@@ -829,11 +847,22 @@ class MainActivity : Activity() {
             elapsed.text = formatPlayerTime(position)
             progress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, value: Int, fromUser: Boolean) {
-                    if (fromUser && total > 0 && total != androidx.media3.common.C.TIME_UNSET) elapsed.text = formatPlayerTime(total * value / 1000)
+                    if (fromUser) {
+                        isUserSeekingPlayerProgress = true
+                        val currentDuration = player.duration
+                        if (currentDuration > 0 && currentDuration != androidx.media3.common.C.TIME_UNSET) {
+                            elapsed.text = formatPlayerTime(currentDuration * value / 1000)
+                        }
+                    }
                 }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStartTrackingTouch(seekBar: SeekBar?) { isUserSeekingPlayerProgress = true }
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                    if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) player.seekTo(total * (seekBar?.progress ?: 0) / 1000)
+                    val currentDuration = player.duration
+                    if (currentDuration > 0 && currentDuration != androidx.media3.common.C.TIME_UNSET) {
+                        player.seekTo(currentDuration * (seekBar?.progress ?: 0) / 1000)
+                    }
+                    isUserSeekingPlayerProgress = false
+                    updatePlayerProgressUi()
                 }
             })
         }
@@ -929,6 +958,9 @@ class MainActivity : Activity() {
         val player = controller
         val elapsed = TextView(this).apply { text = "0:00"; textSize = 10f; setTextColor(mutedColor) }
         val duration = TextView(this).apply { text = "--:--"; textSize = 10f; setTextColor(mutedColor); gravity = Gravity.END }
+        playerScreenProgress = progress
+        playerScreenElapsed = elapsed
+        playerScreenDuration = duration
         val times = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         times.addView(elapsed, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         times.addView(duration, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -977,6 +1009,27 @@ class MainActivity : Activity() {
         screenHost.addView(root, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ))
+    }
+
+    /** Refreshes the elapsed timer and seek bar while the player is open. */
+    private fun updatePlayerProgressUi() {
+        val activePlayer = controller ?: return
+        val seekBar = playerScreenProgress ?: return
+        val elapsedLabel = playerScreenElapsed ?: return
+        val durationLabel = playerScreenDuration ?: return
+        val durationMs = activePlayer.duration
+        val positionMs = activePlayer.currentPosition.coerceAtLeast(0L)
+        elapsedLabel.text = formatPlayerTime(positionMs)
+        if (durationMs > 0L && durationMs != androidx.media3.common.C.TIME_UNSET) {
+            durationLabel.text = formatPlayerTime(durationMs)
+            if (!isUserSeekingPlayerProgress) {
+                seekBar.progress = ((positionMs.toDouble() / durationMs.toDouble()) * seekBar.max)
+                    .toInt().coerceIn(0, seekBar.max)
+            }
+        } else {
+            durationLabel.text = "LIVE"
+            if (!isUserSeekingPlayerProgress) seekBar.progress = 0
+        }
     }
 
     private fun formatPlayerTime(milliseconds: Long): String {
@@ -1724,6 +1777,7 @@ class MainActivity : Activity() {
     }
 
     private fun updatePlaybackUi() {
+        updatePlayerProgressUi()
         val currentItem = controller?.currentMediaItem
         val current = currentItem?.mediaMetadata
         val playing = controller?.isPlaying == true
@@ -1814,6 +1868,7 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        playbackProgressHandler.removeCallbacks(playbackProgressTicker)
         scheduledCatalogFilter?.let { searchHandler.removeCallbacks(it) }
         coverExecutor.shutdownNow()
         controllerFuture?.let { MediaController.releaseFuture(it) }
