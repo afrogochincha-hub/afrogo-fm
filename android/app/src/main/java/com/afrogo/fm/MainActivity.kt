@@ -403,6 +403,13 @@ class MainActivity : Activity() {
     }
 
     private fun showHome() {
+        if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            showHomeLandscape()
+            return
+        }
+        // Restore the standard mobile layout when the device returns to portrait.
+        miniPlayer.visibility = View.VISIBLE
+        if (appShell.childCount > 0) appShell.getChildAt(appShell.childCount - 1).visibility = View.VISIBLE
         val content = prepareScreen("home")
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(profileAvatar(42), LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(10) })
@@ -450,7 +457,104 @@ class MainActivity : Activity() {
         content.addView(button("Ver toda la biblioteca  →", false) { showLibrary() }, fullWidth().apply { topMargin = dp(2); bottomMargin = dp(15) })
     }
 
-    private fun showSearch() {
+
+
+    /**
+     * Wide-screen home layout inspired by the desktop reference.
+     * Android Auto itself uses the MediaLibraryService UI supplied by the car host.
+     */
+    private fun showHomeLandscape() {
+        screenHost.removeAllViews()
+        activeTab = "home"
+        updateNavSelection()
+
+        // Hide phone-only chrome in wide mode. The sidebar contains its own navigation.
+        miniPlayer.visibility = View.GONE
+        if (appShell.childCount > 0) appShell.getChildAt(appShell.childCount - 1).visibility = View.GONE
+
+        val wideRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(bgColor)
+        }
+        val sidebar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(18), dp(12), dp(12))
+            setBackgroundColor(Color.rgb(24, 24, 24))
+        }
+        val brandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        brandRow.addView(brandAvatar(40), LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(10) })
+        val brandText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brandText.addView(TextView(this).apply { text = "AfroGo FM"; textSize = 20f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD) })
+        brandText.addView(TextView(this).apply { text = "Tu música, tu ritmo"; textSize = 11f; setTextColor(mutedColor) })
+        brandRow.addView(brandText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        sidebar.addView(brandRow, fullWidth().apply { bottomMargin = dp(22) })
+
+        fun sideItem(label: String, icon: String, action: () -> Unit) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(10), dp(8), dp(10)); isClickable = true; isFocusable = true
+                setOnClickListener { action() }
+            }
+            item.addView(TextView(this).apply { text = icon; textSize = 22f; setTextColor(Color.WHITE) },
+                centeredSize(dp(34), dp(34)))
+            item.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Color.rgb(225, 225, 225)) },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            sidebar.addView(item, fullWidth())
+        }
+        sideItem("Inicio", "⌂") { showHome() }
+        sideItem("Buscar", "⌕") { showSearch() }
+        sideItem("Tu biblioteca", "▤") { showLibrary() }
+        sideItem("Radio en vivo", "♫") { toggleRadio() }
+        val spacer = View(this)
+        sidebar.addView(spacer, LinearLayout.LayoutParams(1, 0, 1f))
+
+        // Reuse the existing mini-player view in the sidebar so playback stays connected.
+        detachFromParent(miniPlayer)
+        miniPlayer.visibility = View.VISIBLE
+        sidebar.addView(miniPlayer, fullWidth())
+
+        wideRoot.addView(sidebar, LinearLayout.LayoutParams(dp(245), LinearLayout.LayoutParams.MATCH_PARENT))
+        val mainScroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(bgColor) }
+        val mainContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(16), dp(24), dp(24))
+            setBackgroundColor(bgColor)
+        }
+        val topRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        topRow.addView(profileAvatar(38), LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(12) })
+        topRow.addView(TextView(this).apply {
+            text = "Para arrancar"; textSize = 24f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        topRow.addView(button("⋮", false) { showAccountDialog() }, centeredSize(dp(42), dp(42)))
+        mainContent.addView(topRow, fullWidth().apply { bottomMargin = dp(12) })
+
+        val filters = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        filterRow.addView(chip("Todo", true) { showHome() }, wrapParams().apply { rightMargin = dp(8) })
+        filterRow.addView(chip("Música", false) { showSearch() }, wrapParams().apply { rightMargin = dp(8) })
+        filterRow.addView(chip("Favoritos", false) { catalogMode = "favorites"; showLibrary() }, wrapParams().apply { rightMargin = dp(8) })
+        filterRow.addView(chip("Emisoras", false) { toggleRadio() }, wrapParams())
+        filters.addView(filterRow)
+        mainContent.addView(filters, fullWidth().apply { bottomMargin = dp(20) })
+
+        addSectionHeading(mainContent, "Para arrancar", "Tu música disponible")
+        val tracks = catalogTracks.take(12)
+        if (tracks.isNotEmpty()) addTrackCarousel(mainContent, tracks)
+        else mainContent.addView(coloredFeatureCard("Tu biblioteca está lista", "Inicia sesión para cargar canciones y portadas", "Explorar") { showSearch() },
+            fullWidth().apply { bottomMargin = dp(18) })
+        addSectionHeading(mainContent, "Emisoras recomendadas", "Escucha en vivo")
+        mainContent.addView(coloredFeatureCard("AFROGO FM", "Radio oficial · Música en vivo", "▶ Escuchar") { toggleRadio() },
+            fullWidth().apply { bottomMargin = dp(18) })
+
+        mainScroll.addView(mainContent, ScrollView.LayoutParams(
+            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        ))
+        wideRoot.addView(mainScroll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        screenHost.addView(wideRoot, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+    }
+\n    private fun showSearch() {
         val content = prepareScreen("search")
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(brandAvatar(38), LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(10) })
