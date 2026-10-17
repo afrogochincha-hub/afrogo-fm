@@ -1,3 +1,13 @@
+## 3.30.0
+- Playlists, favoritos/canciones guardadas e historial sincronizados con el gateway y aislados por cuenta.
+- Sincronización de cambios desde otros dispositivos con actualización al volver a la app y sondeo periódico.
+- Migración controlada de la biblioteca local antigua del administrador; las cuentas nuevas no importan datos globales de otros usuarios.
+- Escritura de biblioteca protegida frente a cambios rápidos de sesión.
+
+## 3.29.0
+- Sincronización en la nube de playlists personales, favoritos/canciones guardadas e historial de reproducción mediante el gateway de Afrogo.
+- Las playlists pertenecen a la cuenta autenticada y se guardan en el volumen de datos del servidor.
+
 # Cambios de Afrogo FM
 
 ## 3.27.0

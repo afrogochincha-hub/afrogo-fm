@@ -1,0 +1,7 @@
+Afrogo FM PC 3.30.0 / Android 1.7.0 / Gateway 1.2.0
+
+Playlists, favoritos/canciones guardadas e historial de reproducción sincronizados a través del backend y aislados por cuenta.
+El gateway tiene endpoints personales autenticados, escritura atómica de user-libraries.json y conexión Compose persistente a azuracast_default.
+El panel/servicio multimedia Android Auto expone favoritos y playlists.
+
+Validación local: node --check para main/preload/servidor y pruebas de backend aprobadas. Android debe compilarse en GitHub Actions antes de distribuir el APK.

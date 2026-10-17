@@ -17,6 +17,8 @@ import com.google.common.util.concurrent.SettableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.Locale
+import org.json.JSONObject
+import org.json.JSONArray
 
 class AfrogoMediaService : MediaLibraryService() {
     private var librarySession: MediaLibrarySession? = null
@@ -25,11 +27,16 @@ class AfrogoMediaService : MediaLibraryService() {
     private val rootId = "afrogo_root"
     private val radiosId = "afrogo_radios"
     private val libraryId = "afrogo_music"
+    private val favoritesId = "afrogo_favorites"
+    private val playlistsId = "afrogo_playlists"
+    private val playlistPrefix = "afrogo_playlist:"
     private val albumPrefix = "afrogo_album:"
     private val liveId = "afrogo_live_stream"
     @Volatile private var cachedToken: String = ""
     @Volatile private var cachedAt: Long = 0L
     @Volatile private var cachedTracks: List<AfrogoTrack> = emptyList()
+    @Volatile private var cachedLibrary: JSONObject? = null
+    @Volatile private var cachedLibraryAt: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -90,6 +97,35 @@ class AfrogoMediaService : MediaLibraryService() {
         return tracks
     }
 
+    private fun getCloudLibrary(force: Boolean = false): JSONObject {
+        val token = AfrogoApi.savedToken(this)
+        if (token.isBlank()) return JSONObject()
+        if (!force && token == cachedToken && System.currentTimeMillis() - cachedLibraryAt < 15_000L) return cachedLibrary ?: JSONObject()
+        val data = AfrogoApi.library(token)
+        cachedLibrary = data
+        cachedLibraryAt = System.currentTimeMillis()
+        return data
+    }
+
+    private fun idsFrom(array: JSONArray?): Set<String> = if (array == null) emptySet() else
+        (0 until array.length()).map { array.optString(it) }.filter { it.isNotBlank() }.toSet()
+
+    private fun favoriteItems(): List<MediaItem> {
+        val favorites = idsFrom(getCloudLibrary().optJSONArray("favorites"))
+        return getTracks().filter { favorites.contains("azura:${it.id}") }.map { trackItem(it) }
+    }
+
+    private fun playlistFolders(): List<MediaItem> {
+        val playlists = getCloudLibrary().optJSONArray("playlists") ?: return emptyList()
+        return (0 until playlists.length()).mapNotNull { index ->
+            val item = playlists.optJSONObject(index) ?: return@mapNotNull null
+            val id = item.optString("id")
+            if (id.isBlank()) return@mapNotNull null
+            val songCount = item.optJSONArray("songIds")?.length() ?: 0
+            folder(playlistPrefix + Uri.encode(id), item.optString("name", "Playlist"), "$songCount canciones · Tu cuenta Afrogo", item.optString("cover", ""))
+        }
+    }
+
     private fun albumKey(artist: String, album: String): String = albumPrefix + Uri.encode("$artist|$album")
 
     private fun searchMediaItems(query: String): List<MediaItem> {
@@ -106,9 +142,21 @@ class AfrogoMediaService : MediaLibraryService() {
         return when {
             parentId == rootId -> listOf(
                 folder(radiosId, "Radio en vivo", "Emisora oficial de Afrogo FM"),
-                folder(libraryId, "Biblioteca musical", "Catálogo central de AzuraCast")
+                folder(libraryId, "Biblioteca musical", "Catálogo central de AzuraCast"),
+                folder(favoritesId, "Mis favoritos", "Canciones guardadas en tu cuenta"),
+                folder(playlistsId, "Mis playlists", "Colecciones sincronizadas de tu cuenta")
             )
             parentId == radiosId -> listOf(liveMediaItem())
+            parentId == favoritesId -> favoriteItems().ifEmpty { listOf(infoItem("afrogo_no_favorites", "Aún no tienes canciones favoritas")) }
+            parentId == playlistsId -> playlistFolders().ifEmpty { listOf(infoItem("afrogo_no_playlists", "Crea playlists desde la aplicación Afrogo FM")) }
+            parentId.startsWith(playlistPrefix) -> {
+                val playlistId = Uri.decode(parentId.removePrefix(playlistPrefix))
+                val playlist = (getCloudLibrary().optJSONArray("playlists") ?: JSONArray()).let { rows ->
+                    (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }.firstOrNull { it.optString("id") == playlistId }
+                }
+                val ids = idsFrom(playlist?.optJSONArray("songIds"))
+                getTracks().filter { ids.contains("azura:${it.id}") }.map { trackItem(it) }
+            }
             parentId == libraryId -> {
                 val tracks = getTracks()
                 if (tracks.isEmpty()) {

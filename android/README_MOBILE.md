@@ -21,3 +21,8 @@ La aplicación usa el mismo catálogo central de AzuraCast. No configures la API
 - Barra de búsqueda fija fuera del área desplazable de la biblioteca.
 - Lista musical con portada grande, título, artista, álbum, género y botón de reproducción.
 - El texto de búsqueda permanece después de reproducir una canción; la lista conserva el filtro.
+
+## Versión 1.7.0
+- Playlists creadas y editadas en el móvil se guardan en la biblioteca personal del gateway.
+- Favoritos e historial de reproducción asociados a la cuenta y sincronizados con PC.
+- El servicio multimedia Android Auto puede explorar favoritos y playlists de la cuenta.

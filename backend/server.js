@@ -27,12 +27,13 @@ const AZURA_UPLOAD_ENABLED = String(process.env.AZURACAST_UPLOAD_ENABLED || 'fal
 const PUBLIC_BASE = String(process.env.PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const LIBRARIES_FILE = path.join(DATA_DIR, 'user-libraries.json');
 const JWT_SECRET = String(process.env.JWT_SECRET || '');
 const ADMIN_EMAIL = String(process.env.BOOTSTRAP_ADMIN_EMAIL || '').trim().toLowerCase();
 const ADMIN_PASSWORD = String(process.env.BOOTSTRAP_ADMIN_PASSWORD || '');
 const TOKEN_LIFETIME_SECONDS = 12 * 60 * 60;
 const MEDIA_TICKET_SECONDS = 4 * 60 * 60;
-const MAX_BODY = 1024 * 1024;
+const MAX_BODY = 8 * 1024 * 1024; // Permite portadas de playlist en data URI, con límite por usuario.
 
 if (JWT_SECRET.length < 40 || /REEMPLAZAR|CAMBIAR|PLACEHOLDER/i.test(JWT_SECRET)) {
   console.error('ERROR: configura JWT_SECRET con al menos 40 caracteres aleatorios en backend/.env.');
@@ -48,7 +49,9 @@ if (NODE_ENV === 'production' && ADMIN_PASSWORD && /CAMBIAR|PLACEHOLDER/i.test(A
 }
 
 let users = [];
+let userLibraries = {};
 let writeQueue = Promise.resolve();
+let libraryWriteQueue = Promise.resolve();
 const loginAttempts = new Map();
 
 function json(res, status, body, headers = {}) {
@@ -59,7 +62,7 @@ function json(res, status, body, headers = {}) {
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     ...headers,
   });
   res.end(data);
@@ -130,10 +133,103 @@ async function saveUsers() {
   });
   return writeQueue;
 }
+function emptyUserLibrary() {
+  return { initialized: false, playlists: [], favorites: [], savedTracks: [], recentTracks: [], updatedAt: null };
+}
+function cleanTrackId(value) {
+  const id = String(value ?? '').trim();
+  return id.length > 0 && id.length <= 180 && /^[A-Za-z0-9:_./-]+$/.test(id) ? id : '';
+}
+function uniqueTrackIds(values, maximum = 5000) {
+  if (!Array.isArray(values)) return [];
+  const result = []; const seen = new Set();
+  for (const raw of values.slice(0, maximum * 2)) {
+    const id = cleanTrackId(raw);
+    if (id && !seen.has(id)) { seen.add(id); result.push(id); if (result.length >= maximum) break; }
+  }
+  return result;
+}
+function cleanCover(value) {
+  const cover = String(value || '').trim();
+  if (!cover) return '';
+  if (cover.length > 5_800_000) return '';
+  if (/^https:\/\//i.test(cover)) return cover;
+  if (/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(cover)) return cover;
+  return '';
+}
+function sanitizePlaylist(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const id = String(raw.id || '').trim();
+  const name = String(raw.name || '').trim().slice(0, 60);
+  if (!/^[A-Za-z0-9:_-]{1,120}$/.test(id) || !name) return null;
+  return {
+    id,
+    name,
+    description: String(raw.description || '').trim().slice(0, 300),
+    songIds: uniqueTrackIds(raw.songIds, 3000),
+    cover: cleanCover(raw.cover),
+    updatedAt: new Date().toISOString(),
+  };
+}
+function sanitizeRecentTrack(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const id = cleanTrackId(raw.id || raw.trackId);
+  if (!id) return null;
+  const playedAtValue = Number(raw.playedAt || raw.played_at || Date.now());
+  return {
+    id,
+    title: String(raw.title || 'Canción sin título').trim().slice(0, 200),
+    artist: String(raw.artist || 'Artista desconocido').trim().slice(0, 200),
+    album: String(raw.album || '').trim().slice(0, 200),
+    genre: String(raw.genre || '').trim().slice(0, 100),
+    cover: cleanCover(raw.cover || raw.coverUrl),
+    playedAt: Number.isFinite(playedAtValue) && playedAtValue > 0 ? playedAtValue : Date.now(),
+  };
+}
+function libraryFor(userId) {
+  const current = userLibraries[userId];
+  if (!current || typeof current !== 'object') return emptyUserLibrary();
+  return {
+    initialized: current.initialized === true,
+    playlists: Array.isArray(current.playlists) ? current.playlists : [],
+    favorites: uniqueTrackIds(current.favorites),
+    savedTracks: uniqueTrackIds(current.savedTracks),
+    recentTracks: Array.isArray(current.recentTracks) ? current.recentTracks.slice(0, 300) : [],
+    updatedAt: current.updatedAt || null,
+  };
+}
+async function saveUserLibraries() {
+  libraryWriteQueue = libraryWriteQueue.catch(() => {}).then(async () => {
+    await fs.promises.mkdir(DATA_DIR, { recursive: true });
+    const temp = `${LIBRARIES_FILE}.${process.pid}.tmp`;
+    await fs.promises.writeFile(temp, JSON.stringify(userLibraries, null, 2), { mode: 0o600 });
+    await fs.promises.rename(temp, LIBRARIES_FILE);
+  });
+  return libraryWriteQueue;
+}
+function prepareLibraryUpdate(existing, input) {
+  const next = { ...existing, initialized: true, updatedAt: new Date().toISOString() };
+  if (Array.isArray(input.playlists)) {
+    const playlists = []; const seen = new Set();
+    for (const raw of input.playlists.slice(0, 200)) {
+      const playlist = sanitizePlaylist(raw);
+      if (playlist && !seen.has(playlist.id)) { seen.add(playlist.id); playlists.push(playlist); }
+    }
+    next.playlists = playlists;
+  }
+  if (Array.isArray(input.favorites)) next.favorites = uniqueTrackIds(input.favorites);
+  if (Array.isArray(input.savedTracks)) next.savedTracks = uniqueTrackIds(input.savedTracks);
+  if (Array.isArray(input.recentTracks)) {
+    next.recentTracks = input.recentTracks.map(sanitizeRecentTrack).filter(Boolean)
+      .sort((a, b) => b.playedAt - a.playedAt).slice(0, 300);
+  }
+  return next;
+}
 async function initializeUsers() {
   await fs.promises.mkdir(DATA_DIR, { recursive: true });
   try { users = JSON.parse(await fs.promises.readFile(USERS_FILE, 'utf8')); if (!Array.isArray(users)) users = []; }
   catch (_) { users = []; }
+  try { const loaded = JSON.parse(await fs.promises.readFile(LIBRARIES_FILE, 'utf8')); if (loaded && typeof loaded === 'object' && !Array.isArray(loaded)) userLibraries = loaded; } catch (_) { userLibraries = {}; }
   if (ADMIN_EMAIL && ADMIN_PASSWORD && !users.some(u => u.email === ADMIN_EMAIL)) {
     if (ADMIN_PASSWORD.length < 12) throw new Error('BOOTSTRAP_ADMIN_PASSWORD debe tener al menos 12 caracteres.');
     const pw = await hashPassword(ADMIN_PASSWORD);
@@ -295,9 +391,9 @@ async function proxyMedia(req, res, kind, id, ticket) {
 async function handle(req, res) {
   const parsed = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const pathname = decodeURIComponent(parsed.pathname);
-  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' }); return res.end(); }
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' }); return res.end(); }
   if (req.method === 'GET' && pathname === '/health') return json(res, 200, {
-    ok: true, service: 'afrogo-azuracast-gateway', version: '1.0.1',
+    ok: true, service: 'afrogo-azuracast-gateway', version: '1.2.0',
     azuracastConfigured: Boolean(AZURA_BASE && STATION_ID && AZURA_KEY),
     stationConfigured: Boolean(STATION_ID), httpsRequiredInProduction: true,
   });
@@ -333,6 +429,94 @@ async function handle(req, res) {
   if (req.method === 'GET' && pathname === '/api/auth/me') {
     if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de enviar tokens de sesión.' });
     const user = authUser(req); return user ? json(res, 200, { user: safeUser(user) }) : json(res, 401, { error: 'Sesión vencida o no válida.' });
+  }
+  if (pathname.startsWith('/api/me/')) {
+    if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de sincronizar tu biblioteca personal.' });
+    const account = authUser(req);
+    if (!account) return json(res, 401, { error: 'Inicia sesión con una cuenta aprobada para sincronizar tu biblioteca.' });
+
+    if (req.method === 'GET' && pathname === '/api/me/library') {
+      return json(res, 200, { userId: account.id, ...libraryFor(account.id) });
+    }
+
+    if (req.method === 'PUT' && pathname === '/api/me/library') {
+      const input = await readJson(req);
+      if (!input || typeof input !== 'object' || Array.isArray(input)) return json(res, 400, { error: 'El estado de la biblioteca debe ser un objeto JSON.' });
+      const current = libraryFor(account.id);
+      userLibraries[account.id] = prepareLibraryUpdate(current, input);
+      await saveUserLibraries();
+      return json(res, 200, { ok: true, userId: account.id, ...libraryFor(account.id) });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/me/playlists') {
+      const input = await readJson(req);
+      if (!input || typeof input !== 'object' || Array.isArray(input)) return json(res, 400, { error: 'La playlist debe enviarse como un objeto JSON.' });
+      const playlist = sanitizePlaylist(input.playlist || input);
+      if (!playlist) return json(res, 400, { error: 'La playlist necesita un identificador y un nombre válidos.' });
+      const library = libraryFor(account.id);
+      const index = library.playlists.findIndex(item => item.id === playlist.id);
+      if (index >= 0) library.playlists[index] = playlist;
+      else {
+        if (library.playlists.length >= 200) return json(res, 413, { error: 'Has alcanzado el límite de 200 playlists por cuenta.' });
+        library.playlists.push(playlist);
+      }
+      library.initialized = true; library.updatedAt = new Date().toISOString();
+      userLibraries[account.id] = library;
+      await saveUserLibraries();
+      return json(res, 200, { ok: true, playlist, updatedAt: library.updatedAt });
+    }
+
+    const playlistMatch = pathname.match(/^\/api\/me\/playlists\/([A-Za-z0-9:_-]{1,120})$/);
+    if (req.method === 'DELETE' && playlistMatch) {
+      const playlistId = playlistMatch[1];
+      const library = libraryFor(account.id);
+      library.playlists = library.playlists.filter(item => item.id !== playlistId);
+      library.initialized = true; library.updatedAt = new Date().toISOString();
+      userLibraries[account.id] = library;
+      await saveUserLibraries();
+      return json(res, 200, { ok: true, deletedId: playlistId, updatedAt: library.updatedAt });
+    }
+
+    if (req.method === 'POST' && (pathname === '/api/me/favorites' || pathname === '/api/me/saved-tracks')) {
+      const input = await readJson(req);
+      if (!input || typeof input !== 'object' || Array.isArray(input)) return json(res, 400, { error: 'El cambio de canción guardada debe ser un objeto JSON.' });
+      const trackId = cleanTrackId(input.trackId || input.id);
+      if (!trackId) return json(res, 400, { error: 'Falta un identificador de canción válido.' });
+      const library = libraryFor(account.id);
+      const field = pathname.endsWith('/favorites') ? 'favorites' : 'savedTracks';
+      const values = new Set(library[field]);
+      if (input.favorite === true || input.saved === true || input.active === true) values.add(trackId);
+      else if (input.favorite === false || input.saved === false || input.active === false) values.delete(trackId);
+      else return json(res, 400, { error: 'Indica favorite=true/false o saved=true/false.' });
+      library[field] = Array.from(values).slice(-5000);
+      // Favoritos también forman la colección de canciones guardadas, para que ambas vistas se sincronicen.
+      if (field === 'favorites') {
+        const saved = new Set(library.savedTracks);
+        if (input.favorite === true) saved.add(trackId); else saved.delete(trackId);
+        library.savedTracks = Array.from(saved).slice(-5000);
+      }
+      library.initialized = true; library.updatedAt = new Date().toISOString();
+      userLibraries[account.id] = library;
+      await saveUserLibraries();
+      return json(res, 200, { ok: true, trackId, favorites: library.favorites, savedTracks: library.savedTracks, updatedAt: library.updatedAt });
+    }
+
+    if (req.method === 'POST' && pathname === '/api/me/history') {
+      const input = await readJson(req);
+      if (!input || typeof input !== 'object' || Array.isArray(input)) return json(res, 400, { error: 'El registro de reproducción debe ser un objeto JSON.' });
+      const raw = input.track || input;
+      const recent = sanitizeRecentTrack(raw);
+      if (!recent) return json(res, 400, { error: 'No se pudo guardar el registro de reproducción.' });
+      const library = libraryFor(account.id);
+      library.recentTracks = [recent, ...library.recentTracks.filter(item => !(item.id === recent.id && Math.abs(item.playedAt - recent.playedAt) < 1500))]
+        .sort((a, b) => b.playedAt - a.playedAt).slice(0, 300);
+      library.initialized = true; library.updatedAt = new Date().toISOString();
+      userLibraries[account.id] = library;
+      await saveUserLibraries();
+      return json(res, 201, { ok: true, recentTracks: library.recentTracks, updatedAt: library.updatedAt });
+    }
+
+    return json(res, 404, { error: 'Ruta de biblioteca personal no encontrada.' });
   }
   if (req.method === 'GET' && pathname === '/api/admin/users') {
     if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de enviar tokens de sesión.' });

@@ -1,6 +1,7 @@
 package com.afrogo.fm
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -23,6 +24,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.util.LruCache
 import androidx.core.content.ContextCompat
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import androidx.media3.common.MediaItem
@@ -47,6 +50,10 @@ class MainActivity : Activity() {
     private lateinit var searchClearButton: Button
     private lateinit var catalogSummary: TextView
     private var catalogTracks: List<AfrogoTrack> = emptyList()
+    private var favoriteTrackIds: MutableSet<String> = linkedSetOf()
+    private var userPlaylists: MutableList<JSONObject> = mutableListOf()
+    private var catalogMode: String = "all"
+    private var activePlaylistId: String = ""
     private var catalogQuery: String = ""
     private val searchHandler = Handler(Looper.getMainLooper())
     private var scheduledCatalogFilter: Runnable? = null
@@ -155,6 +162,11 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         catalogHeader.addView(button("Actualizar", false) { loadCatalog() })
         page.addView(catalogHeader, fullWidth().apply { bottomMargin = dp(8) })
+        val libraryActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        libraryActions.addView(button("Toda la música", false) { catalogMode = "all"; activePlaylistId = ""; renderCatalogTracks() }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { rightMargin = dp(5) })
+        libraryActions.addView(button("Favoritos", false) { catalogMode = "favorites"; activePlaylistId = ""; renderCatalogTracks() }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { rightMargin = dp(5) })
+        libraryActions.addView(button("Mis playlists", false) { showPlaylistsDialog() }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        page.addView(libraryActions, fullWidth().apply { bottomMargin = dp(8) })
         catalogSummary = TextView(this).apply {
             text = "Inicia sesión para explorar las canciones."
             textSize = 12f; setTextColor(Color.rgb(177, 159, 190)); setPadding(dp(4), dp(4), dp(4), dp(8))
@@ -243,9 +255,18 @@ class MainActivity : Activity() {
         Thread {
             try {
                 val tracks = AfrogoApi.catalog(token)
+                val cloudLibrary = try { AfrogoApi.library(token) } catch (_: Exception) { JSONObject() }
+                val favoritesJson = cloudLibrary.optJSONArray("favorites") ?: JSONArray()
+                val playlistJson = cloudLibrary.optJSONArray("playlists") ?: JSONArray()
+                val favorites = linkedSetOf<String>()
+                for (i in 0 until favoritesJson.length()) favorites.add(favoritesJson.optString(i))
+                val playlists = mutableListOf<JSONObject>()
+                for (i in 0 until playlistJson.length()) playlistJson.optJSONObject(i)?.let { playlists.add(it) }
                 runOnUiThread {
                     catalogTracks = tracks
-                    authStatus.text = "Biblioteca sincronizada: ${tracks.size} canción(es) desde AzuraCast."
+                    favoriteTrackIds = favorites
+                    userPlaylists = playlists
+                    authStatus.text = "Biblioteca sincronizada: ${tracks.size} canciones · ${userPlaylists.size} playlist(s) en la nube."
                     renderCatalogTracks()
                 }
             } catch (e: Exception) {
@@ -262,16 +283,32 @@ class MainActivity : Activity() {
         if (!::catalogContainer.isInitialized) return
         catalogContainer.removeAllViews()
         val normalizedQuery = normalizeSearch(catalogQuery)
+        val playlistIds = userPlaylists.firstOrNull { it.optString("id") == activePlaylistId }?.optJSONArray("songIds")?.let { arr ->
+            (0 until arr.length()).map { arr.optString(it) }.toSet()
+        } ?: emptySet()
         val filtered = catalogTracks.filter { track ->
-            normalizedQuery.isBlank() || normalizeSearch("${track.title} ${track.artist} ${track.album} ${track.genre}").contains(normalizedQuery)
+            val cloudId = "azura:${track.id}"
+            val modeMatches = when (catalogMode) {
+                "favorites" -> favoriteTrackIds.contains(cloudId)
+                "playlist" -> playlistIds.contains(cloudId)
+                else -> true
+            }
+            modeMatches && (normalizedQuery.isBlank() || normalizeSearch("${track.title} ${track.artist} ${track.album} ${track.genre}").contains(normalizedQuery))
         }
-        catalogSummary.text = if (catalogQuery.isBlank()) {
-            "${catalogTracks.size} canciones · Biblioteca central de AzuraCast"
-        } else {
-            "${filtered.size} resultado(s) para «${catalogQuery}»"
+        val modeLabel = when (catalogMode) {
+            "favorites" -> "Favoritos sincronizados"
+            "playlist" -> "Playlist: ${userPlaylists.firstOrNull { it.optString("id") == activePlaylistId }?.optString("name", "") ?: "Mis canciones"}"
+            else -> "Biblioteca central de AzuraCast"
         }
+        catalogSummary.text = if (catalogQuery.isBlank()) "${filtered.size} canciones · $modeLabel" else "${filtered.size} resultado(s) para «${catalogQuery}» · $modeLabel"
         if (filtered.isEmpty()) {
-            renderCatalogMessage(if (catalogQuery.isBlank()) "El servidor no devolvió canciones. Comprueba la estación y los permisos de AzuraCast." else "No encontramos canciones. Prueba con otro título, artista o álbum.")
+            val emptyText = when {
+                catalogMode == "favorites" -> "Aún no guardaste favoritos en tu cuenta. Pulsa ♡ en una canción para guardarla en la nube."
+                catalogMode == "playlist" -> "Esta playlist está vacía. Usa ＋ en una canción para añadirla."
+                catalogQuery.isNotBlank() -> "No encontramos canciones. Prueba con otro título, artista o álbum."
+                else -> "El servidor no devolvió canciones. Comprueba la estación y los permisos de AzuraCast."
+            }
+            renderCatalogMessage(emptyText)
             return
         }
         filtered.take(150).forEach { track ->
@@ -318,7 +355,10 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(6) })
             info.addView(badges)
             row.addView(info, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(button("▶", true) { playTrack(track) }, centeredSize(dp(46), dp(46)).apply { leftMargin = dp(8) })
+            row.addView(button("▶", true) { playTrack(track) }, centeredSize(dp(42), dp(44)).apply { leftMargin = dp(5) })
+            val cloudId = "azura:${track.id}"
+            row.addView(button(if (favoriteTrackIds.contains(cloudId)) "♥" else "♡", false) { toggleFavorite(track) }, centeredSize(dp(38), dp(44)).apply { leftMargin = dp(2) })
+            row.addView(button("＋", false) { addTrackToPlaylist(track) }, centeredSize(dp(38), dp(44)).apply { leftMargin = dp(2) })
             catalogContainer.addView(row, fullWidth().apply { bottomMargin = dp(9) })
         }
         if (filtered.size > 150) {
@@ -327,6 +367,88 @@ class MainActivity : Activity() {
                 setTextColor(Color.rgb(180, 166, 192)); setPadding(dp(4), dp(5), dp(4), dp(10))
             }, fullWidth())
         }
+    }
+
+    private fun cloudTrackId(track: AfrogoTrack): String = "azura:${track.id}"
+
+    private fun toggleFavorite(track: AfrogoTrack) {
+        val cloudId = cloudTrackId(track)
+        val active = !favoriteTrackIds.contains(cloudId)
+        if (active) favoriteTrackIds.add(cloudId) else favoriteTrackIds.remove(cloudId)
+        renderCatalogTracks()
+        val token = AfrogoApi.savedToken(this)
+        Thread {
+            try { AfrogoApi.setFavorite(token, cloudId, active) }
+            catch (e: Exception) {
+                runOnUiThread {
+                    if (active) favoriteTrackIds.remove(cloudId) else favoriteTrackIds.add(cloudId)
+                    renderCatalogTracks()
+                    authStatus.text = "No se pudo sincronizar el favorito: ${e.message ?: "Error de conexión"}"
+                }
+            }
+        }.start()
+    }
+
+    private fun addTrackToPlaylist(track: AfrogoTrack) {
+        if (userPlaylists.isEmpty()) { createCloudPlaylist(track); return }
+        val names = userPlaylists.map { it.optString("name", "Playlist") }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Añadir a playlist")
+            .setItems(names) { _, which ->
+                val playlist = userPlaylists.getOrNull(which) ?: return@setItems
+                val songIds = playlist.optJSONArray("songIds") ?: JSONArray()
+                val id = cloudTrackId(track)
+                val already = (0 until songIds.length()).any { songIds.optString(it) == id }
+                if (!already) songIds.put(id)
+                playlist.put("songIds", songIds)
+                persistPlaylist(playlist, "Canción añadida a ${playlist.optString("name")}")
+            }
+            .setNeutralButton("＋ Crear playlist") { _, _ -> createCloudPlaylist(track) }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun showPlaylistsDialog() {
+        if (userPlaylists.isEmpty()) { createCloudPlaylist(null); return }
+        val names = userPlaylists.map { "${it.optString("name", "Playlist")} · ${(it.optJSONArray("songIds")?.length() ?: 0)} canciones" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Tus playlists en la nube")
+            .setItems(names) { _, which ->
+                val playlist = userPlaylists.getOrNull(which) ?: return@setItems
+                catalogMode = "playlist"; activePlaylistId = playlist.optString("id"); catalogSearchInput.setText(""); renderCatalogTracks()
+            }
+            .setNeutralButton("＋ Crear playlist") { _, _ -> createCloudPlaylist(null) }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun createCloudPlaylist(track: AfrogoTrack?) {
+        val nameInput = EditText(this).apply { hint = "Nombre de la playlist"; setSingleLine(true); setPadding(dp(16), dp(10), dp(16), dp(10)) }
+        AlertDialog.Builder(this).setTitle("Crear playlist en la nube").setMessage("Se sincronizará con tus otros dispositivos.")
+            .setView(nameInput)
+            .setPositiveButton("Crear") { _, _ ->
+                val name = nameInput.text.toString().trim()
+                if (name.isBlank()) { authStatus.text = "Escribe un nombre para la playlist."; return@setPositiveButton }
+                val songIds = JSONArray()
+                if (track != null) songIds.put(cloudTrackId(track))
+                val playlist = JSONObject().put("id", "pl_" + java.util.UUID.randomUUID().toString().replace("-", ""))
+                    .put("name", name.take(60)).put("description", "").put("songIds", songIds).put("cover", "")
+                persistPlaylist(playlist, "Playlist creada y sincronizada")
+            }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun persistPlaylist(playlist: JSONObject, successMessage: String) {
+        val token = AfrogoApi.savedToken(this)
+        Thread {
+            try {
+                val saved = AfrogoApi.upsertPlaylist(token, playlist).optJSONObject("playlist") ?: playlist
+                runOnUiThread {
+                    val index = userPlaylists.indexOfFirst { it.optString("id") == saved.optString("id") }
+                    if (index >= 0) userPlaylists[index] = saved else userPlaylists.add(saved)
+                    catalogMode = "all"; activePlaylistId = ""; renderCatalogTracks()
+                    authStatus.text = successMessage
+                }
+            } catch (e: Exception) {
+                runOnUiThread { authStatus.text = "No se pudo sincronizar la playlist: ${e.message ?: "Error de conexión"}" }
+            }
+        }.start()
     }
 
     private fun normalizeSearch(value: String): String = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
@@ -374,6 +496,10 @@ class MainActivity : Activity() {
         if (player == null) { pendingMediaItem = item; playbackStatus.text = "Conectando con el reproductor…"; connectMediaController(); return }
         player.setMediaItem(item); player.prepare(); player.play()
         playbackStatus.text = "Reproduciendo: ${track.title} · ${track.artist}"
+        val token = AfrogoApi.savedToken(this)
+        val recent = JSONObject().put("id", cloudTrackId(track)).put("title", track.title).put("artist", track.artist)
+            .put("album", track.album).put("genre", track.genre).put("cover", track.coverUrl).put("playedAt", System.currentTimeMillis())
+        Thread { try { AfrogoApi.addRecent(token, recent) } catch (_: Exception) { } }.start()
     }
 
     private fun connectMediaController() {

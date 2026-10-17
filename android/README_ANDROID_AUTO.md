@@ -15,3 +15,7 @@ La aplicación usa el mismo catálogo central de AzuraCast. No configures la API
 
 ## Búsqueda en Android Auto
 La biblioteca implementa búsqueda de títulos, artistas, álbumes y géneros a través de las callbacks de MediaLibraryService, para que Android Auto pueda usar su interfaz de búsqueda/voz compatible. La interfaz en pantalla del automóvil la presenta Android Auto, no una vista personalizada de la app, por diseño de seguridad.
+
+## Sincronización de biblioteca personal
+
+Con sesión iniciada, el servicio multimedia consulta la biblioteca personal del gateway para mostrar Favoritos y Mis playlists. Los cambios se guardan usando la cuenta autenticada.

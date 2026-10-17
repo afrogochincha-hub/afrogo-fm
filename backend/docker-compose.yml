@@ -16,8 +16,12 @@ services:
       - afrogo-users:/data
     networks:
       - afrogo-internal
+      - azuracast-proxy
 volumes:
   afrogo-users:
 networks:
   afrogo-internal:
     driver: bridge
+  azuracast-proxy:
+    external: true
+    name: azuracast_default

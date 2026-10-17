@@ -64,6 +64,15 @@ object AfrogoApi {
 
     fun me(token: String): JSONObject = request("/api/auth/me", token = token)
 
+    /** Biblioteca personal sincronizada en la nube y aislada por la cuenta autenticada. */
+    fun library(token: String): JSONObject = request("/api/me/library", token = token)
+    fun saveLibrary(token: String, library: JSONObject): JSONObject = request("/api/me/library", "PUT", library, token)
+    fun upsertPlaylist(token: String, playlist: JSONObject): JSONObject = request("/api/me/playlists", "POST", JSONObject().put("playlist", playlist), token)
+    fun deletePlaylist(token: String, playlistId: String): JSONObject = request("/api/me/playlists/${java.net.URLEncoder.encode(playlistId, "UTF-8")}", "DELETE", token = token)
+    fun setFavorite(token: String, trackId: String, favorite: Boolean): JSONObject = request("/api/me/favorites", "POST", JSONObject().put("trackId", trackId).put("favorite", favorite), token)
+    fun setSavedTrack(token: String, trackId: String, saved: Boolean): JSONObject = request("/api/me/saved-tracks", "POST", JSONObject().put("trackId", trackId).put("saved", saved), token)
+    fun addRecent(token: String, track: JSONObject): JSONObject = request("/api/me/history", "POST", JSONObject().put("track", track), token)
+
     fun catalog(token: String): List<AfrogoTrack> {
         val data = request("/api/catalog", token = token)
         val items = data.optJSONArray("items") ?: return emptyList()

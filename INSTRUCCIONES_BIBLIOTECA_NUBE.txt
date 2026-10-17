@@ -1,0 +1,20 @@
+AFROGO FM — BIBLIOTECA PERSONAL EN LA NUBE
+
+Qué incluye esta versión
+- Playlists personales guardadas en el servidor y aisladas por cuenta.
+- Favoritos/canciones guardadas sincronizadas con la cuenta.
+- Historial de reproducción guardado en el gateway.
+- PC sincroniza al iniciar sesión, al volver a la ventana y mediante actualización periódica.
+- Android carga y guarda playlists/favoritos en la nube; Android Auto navega Mis favoritos y Mis playlists desde el servicio multimedia.
+- El volumen Docker del gateway conserva estos datos al recrear el contenedor.
+
+IMPORTANTE: subir las fuentes a GitHub no actualiza automáticamente el backend que está ejecutándose en Oracle.
+
+ORDEN RECOMENDADO
+1. Actualizar primero el gateway en Oracle con el ZIP separado afrogo_gateway_cloud_library_v1_2.zip. Sigue docs/ACTUALIZAR_GATEWAY_NUBE.md. No reemplaces .env ni borres el volumen afrogo-users.
+2. Copiar las carpetas desktop, android, backend, docs y .github de este paquete al repositorio local afrogo-fm.
+3. En GitHub Desktop, hacer Commit y luego Push origin.
+4. Esperar que backend-check, windows-desktop y android-debug estén en verde en GitHub Actions.
+5. Descargar los nuevos artefactos de Windows y Android. Android Auto se incluye en el mismo APK Android.
+
+Los datos de biblioteca se almacenan en el servidor en /data/user-libraries.json. No se incluye ninguna clave ni archivo .env real en los paquetes.

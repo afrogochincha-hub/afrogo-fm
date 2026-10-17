@@ -70,3 +70,7 @@ La sección Álbumes compara visualmente las portadas y reúne pistas que usan l
 
 ## Versión 3.28.0
 Incluye barra de búsqueda fija y suave; en PC el stream de radio se conserva al cambiar de sección porque el elemento de audio persiste fuera de la vista dinámica. Android usa el buscador fijo y Android Auto usa el servicio multimedia de Media3.
+
+## Biblioteca personal en la nube (v1.2)
+
+Playlists, favoritos/canciones guardadas e historial se almacenan en el gateway y están aislados por cuenta. PC y Android consumen `/api/me/library`; Android Auto explora favoritos y playlists desde el servicio multimedia. Los datos persisten en el volumen Docker del gateway; no borrar `afrogo-users`. Véase `docs/CLOUD_LIBRARY_SYNC.md`.
