@@ -25,6 +25,7 @@ import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.SeekBar
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.util.LruCache
 import androidx.core.content.ContextCompat
@@ -79,6 +80,10 @@ class MainActivity : Activity() {
     private lateinit var miniPlayerTitle: TextView
     private lateinit var miniPlayerArtist: TextView
     private lateinit var miniPlayerPlayButton: Button
+    private var landscapePlayerCover: ImageView? = null
+    private var landscapePlayerTitle: TextView? = null
+    private var landscapePlayerArtist: TextView? = null
+    private var landscapePlayerToggle: Button? = null
     private val navLabels = linkedMapOf<String, TextView>()
     private var activeTab: String = "home"
     private var isRegistrationMode: Boolean = false
@@ -508,10 +513,65 @@ class MainActivity : Activity() {
         val spacer = View(this)
         sidebar.addView(spacer, LinearLayout.LayoutParams(1, 0, 1f))
 
-        // Reuse the existing mini-player view in the sidebar so playback stays connected.
-        detachFromParent(miniPlayer)
-        miniPlayer.visibility = View.VISIBLE
-        sidebar.addView(miniPlayer, fullWidth())
+        // Desktop-like player dock on the left, matching the landscape reference.
+        // Use dedicated views so portrait mini-player layout remains unchanged.
+        val dock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(2), dp(8), dp(2), dp(6))
+            background = roundedSurface(Color.rgb(28, 25, 30), dp(8), Color.rgb(42, 38, 45))
+        }
+        val dockCover = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "Portada de la canción actual"
+            setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+        }
+        landscapePlayerCover = dockCover
+        dock.addView(dockCover, LinearLayout.LayoutParams(dp(104), dp(104)).apply { bottomMargin = dp(12) })
+        val dockTitle = TextView(this).apply {
+            text = miniPlayerTitle.text
+            textSize = 14f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        landscapePlayerTitle = dockTitle
+        dock.addView(dockTitle, fullWidth())
+        val dockArtist = TextView(this).apply {
+            text = miniPlayerArtist.text
+            textSize = 12f; setTextColor(mutedColor)
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        landscapePlayerArtist = dockArtist
+        dock.addView(dockArtist, fullWidth().apply { bottomMargin = dp(12) })
+        val dockProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progress = 0
+            progressTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(75, 70, 78))
+        }
+        dock.addView(dockProgress, fullWidth().apply { bottomMargin = dp(8) })
+        val dockControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+        }
+        fun dockButton(label: String, action: () -> Unit) {
+            dockControls.addView(button(label, label == "▶") { action() },
+                LinearLayout.LayoutParams(0, dp(40), 1f).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        }
+        dockButton("|◀") { controller?.seekToPreviousMediaItem() }
+        val dockToggle = button(if (controller?.isPlaying == true) "Ⅱ" else "▶", true) {
+            val active = controller
+            if (active == null) connectMediaController()
+            else if (active.isPlaying || active.playWhenReady) active.pause() else active.play()
+        }
+        landscapePlayerToggle = dockToggle
+        dockControls.addView(dockToggle, LinearLayout.LayoutParams(0, dp(40), 1.2f))
+        dockButton("▶|") { controller?.seekToNextMediaItem() }
+        dock.addView(dockControls, fullWidth())
+        dock.setOnClickListener { showPlayerScreen() }
+        dockToggle.setOnClickListener {
+            val active = controller
+            if (active == null) connectMediaController()
+            else if (active.isPlaying || active.playWhenReady) active.pause() else active.play()
+        }
+        sidebar.addView(dock, fullWidth())
 
         wideRoot.addView(sidebar, LinearLayout.LayoutParams(dp(245), LinearLayout.LayoutParams.MATCH_PARENT))
         val mainScroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(bgColor) }
@@ -1643,7 +1703,19 @@ class MainActivity : Activity() {
                 miniPlayerTitle.text = current?.title?.toString() ?: "AfroGo FM"
                 miniPlayerArtist.text = current?.artist?.toString() ?: "Radio en vivo"
                 miniPlayerPlayButton.text = if (playing) "Ⅱ" else "▶"
+                landscapePlayerTitle?.text = current?.title?.toString() ?: "AfroGo FM"
+                landscapePlayerArtist?.text = current?.artist?.toString() ?: "Radio en vivo"
+                landscapePlayerToggle?.text = if (playing || controller?.playWhenReady == true) "Ⅱ" else "▶"
                 val coverUrl = current?.artworkUri?.toString().orEmpty()
+                val landscapeCover = landscapePlayerCover
+                if (landscapeCover != null && coverUrl.isNotBlank() && landscapeCover.tag != coverUrl) {
+                    landscapeCover.tag = coverUrl
+                    landscapeCover.setImageDrawable(null)
+                    loadCoverInto(coverUrl, landscapeCover)
+                } else if (landscapeCover != null && coverUrl.isBlank()) {
+                    landscapeCover.tag = "afrogo-default"
+                    landscapeCover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+                }
                 if (coverUrl.isNotBlank()) {
                     if (miniPlayerCover.tag != coverUrl) {
                         miniPlayerCover.tag = coverUrl
