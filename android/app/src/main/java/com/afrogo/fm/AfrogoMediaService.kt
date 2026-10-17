@@ -16,6 +16,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.Locale
 
 class AfrogoMediaService : MediaLibraryService() {
     private var librarySession: MediaLibrarySession? = null
@@ -91,6 +92,16 @@ class AfrogoMediaService : MediaLibraryService() {
 
     private fun albumKey(artist: String, album: String): String = albumPrefix + Uri.encode("$artist|$album")
 
+    private fun searchMediaItems(query: String): List<MediaItem> {
+        val normalized = query.trim().lowercase(Locale.ROOT)
+        if (normalized.isBlank()) return emptyList()
+        return getTracks().filter { track ->
+            listOf(track.title, track.artist, track.album, track.genre).any { value ->
+                value.lowercase(Locale.ROOT).contains(normalized)
+            }
+        }.map { trackItem(it) }
+    }
+
     private fun childrenFor(parentId: String, params: LibraryParams?): List<MediaItem> {
         return when {
             parentId == rootId -> listOf(
@@ -136,6 +147,48 @@ class AfrogoMediaService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val root = folder(rootId, "Afrogo FM", "Radio y biblioteca musical")
             return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+        }
+
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?
+        ): ListenableFuture<LibraryResult<Void>> {
+            val future = SettableFuture.create<LibraryResult<Void>>()
+            ioExecutor.execute {
+                try {
+                    val count = searchMediaItems(query).size
+                    if (query.isNotBlank()) session.notifySearchResultChanged(browser, query, count, params)
+                    future.set(LibraryResult.ofVoid())
+                } catch (_: Exception) {
+                    if (query.isNotBlank()) session.notifySearchResultChanged(browser, query, 0, params)
+                    future.set(LibraryResult.ofVoid())
+                }
+            }
+            return future
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            ioExecutor.execute {
+                try {
+                    val all = searchMediaItems(query)
+                    val start = (page.coerceAtLeast(0) * pageSize.coerceAtLeast(1)).coerceAtMost(all.size)
+                    val end = (start + pageSize.coerceAtLeast(1)).coerceAtMost(all.size)
+                    future.set(LibraryResult.ofItemList(ImmutableList.copyOf(all.subList(start, end)), params))
+                } catch (_: Exception) {
+                    future.set(LibraryResult.ofItemList(ImmutableList.of(), params))
+                }
+            }
+            return future
         }
 
         override fun onGetChildren(

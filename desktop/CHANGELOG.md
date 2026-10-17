@@ -1,3 +1,11 @@
+# Cambios de Afrogo FM
+
+## 3.27.0
+- Barra de búsqueda fijada arriba mientras se desplaza la biblioteca.
+- Resultados de búsqueda visuales con portada más grande, artista, álbum, género y acciones.
+- Al seleccionar una canción desde los resultados, la búsqueda permanece abierta y la consulta no se borra.
+- Filas de canciones con portadas más grandes, badges de tipo y estado visual de reproducción.
+
 ## 3.26.1
 - Reemplazados los iconos anteriores por el icono oficial proporcionado por el usuario: fondo degradado morado y marca Afrogo blanca.
 - Regenerado `afrogo-icon.ico` con múltiples tamaños para ventana, barra de título, ejecutable portable y barra de tareas de Windows.

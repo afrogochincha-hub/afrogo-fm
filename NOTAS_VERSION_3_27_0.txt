@@ -1,0 +1,14 @@
+Afrogo FM — Actualización de interfaz y búsqueda
+
+PC: 3.27.0
+Android / Android Auto: 1.5.0
+
+Cambios:
+- Barra de búsqueda fija durante el scroll de la biblioteca de escritorio.
+- Resultados de búsqueda rediseñados: portada más grande, artista, álbum, género, tipo de contenido y acción para añadir a playlist.
+- Seleccionar/reproducir desde el desplegable ya no cierra la búsqueda, no borra la consulta y mantiene los resultados visibles.
+- Filas de canciones de escritorio con portadas más grandes y badges de metadatos.
+- Aplicación Android: barra de búsqueda anclada fuera de la zona desplazable; lista filtrable por título, artista, álbum y género, con portadas y controles más visuales.
+- Servicio Android Auto/Media3 implementa las callbacks de búsqueda para encontrar canciones por título, artista, álbum o género. Android Auto presenta la interfaz de búsqueda del sistema por diseño de seguridad.
+
+Validaciones ejecutadas: sintaxis del JavaScript principal/preload y JavaScript inline de la interfaz; revisión de estructura de Android y manifest. La compilación de Android debe confirmarse en GitHub Actions tras hacer push.

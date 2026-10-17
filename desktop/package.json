@@ -1,7 +1,7 @@
 {
   "name": "afrogo-fm",
-  "version": "3.26.1",
-  "description": "Afrogo FM con icono oficial, catálogo central AzuraCast y clasificación automática de géneros",
+  "version": "3.27.0",
+  "description": "Afrogo FM con búsqueda fija, resultados visuales y catálogo central AzuraCast",
   "main": "main.js",
   "author": "Afrogo FM",
   "license": "UNLICENSED",

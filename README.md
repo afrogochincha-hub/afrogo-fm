@@ -1,3 +1,11 @@
+# Afrogo FM — actualización de búsqueda y biblioteca visual
+
+Última revisión de fuentes: **PC 3.27.0** y **Android/Android Auto 1.5.0**.
+
+Esta revisión añade una barra de búsqueda fija en la aplicación de PC y móvil, resultados visuales con portadas más grandes, conservación de la consulta después de reproducir una canción y búsqueda multimedia compatible con el navegador de Android Auto.
+
+Consulta `docs/BUSQUEDA_Y_UI.md` para los detalles y el procedimiento para subir los cambios a GitHub.
+
 # Afrogo FM
 
 Repositorio privado con código fuente de Afrogo FM para Windows, Android y Android Auto, conectado a la biblioteca central de AzuraCast mediante una API propia.

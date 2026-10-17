@@ -15,3 +15,9 @@ No configures HTTP para autenticación ni incrustes API keys de AzuraCast en la 
 El botón de radio en vivo sigue usando la URL del mount point de AzuraCast; confirma ese enlace en AzuraCast > Public > Listen.
 
 La aplicación usa el mismo catálogo central de AzuraCast. No configures la API Key de AzuraCast en Android.
+
+
+## Versión 1.5.0
+- Barra de búsqueda fija fuera del área desplazable de la biblioteca.
+- Lista musical con portada grande, título, artista, álbum, género y botón de reproducción.
+- El texto de búsqueda permanece después de reproducir una canción; la lista conserva el filtro.

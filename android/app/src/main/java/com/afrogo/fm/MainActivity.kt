@@ -2,19 +2,29 @@ package com.afrogo.fm
 
 import android.app.Activity
 import android.content.ComponentName
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
+import android.util.LruCache
 import androidx.core.content.ContextCompat
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -32,6 +42,18 @@ class MainActivity : Activity() {
     private lateinit var passwordInput: EditText
     private lateinit var nameInput: EditText
     private lateinit var catalogContainer: LinearLayout
+    private lateinit var searchBar: LinearLayout
+    private lateinit var catalogSearchInput: EditText
+    private lateinit var searchClearButton: Button
+    private lateinit var catalogSummary: TextView
+    private var catalogTracks: List<AfrogoTrack> = emptyList()
+    private var catalogQuery: String = ""
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var scheduledCatalogFilter: Runnable? = null
+    private val coverExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+    private val coverCache = object : LruCache<String, Bitmap>(12 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
+    }
     private lateinit var radioButton: Button
     private lateinit var signInButton: Button
     private lateinit var registerButton: Button
@@ -47,7 +69,42 @@ class MainActivity : Activity() {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(Color.rgb(42, 12, 63), Color.rgb(18, 14, 21), Color.rgb(12, 10, 15)))
         }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(15, 11, 18))
+        }
+        searchBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(7), dp(10), dp(7))
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(29, 22, 36)); cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), Color.rgb(76, 47, 94))
+            }
+            visibility = View.GONE
+        }
+        searchBar.addView(TextView(this).apply {
+            text = "⌕"; textSize = 29f; gravity = Gravity.CENTER
+            setTextColor(Color.rgb(220, 190, 241))
+        }, centeredSize(dp(38), dp(44)))
+        catalogSearchInput = EditText(this).apply {
+            hint = "Buscar canción, artista o álbum…"
+            textSize = 15f; singleLine = true
+            setHintTextColor(Color.rgb(172, 156, 184)); setTextColor(Color.WHITE)
+            setPadding(dp(6), dp(8), dp(4), dp(8))
+            background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        searchBar.addView(catalogSearchInput, LinearLayout.LayoutParams(0, dp(46), 1f))
+        searchClearButton = button("×", false) {
+            catalogSearchInput.setText("")
+            catalogSearchInput.clearFocus()
+        }.apply { visibility = View.GONE; minWidth = dp(38) }
+        searchBar.addView(searchClearButton, centeredSize(dp(42), dp(42)))
+        root.addView(searchBar, fullWidth().apply { leftMargin = dp(12); rightMargin = dp(12); topMargin = dp(10); bottomMargin = dp(4) })
+
         val scroll = ScrollView(this).apply { isFillViewport = true; addView(page) }
+        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         page.addView(TextView(this).apply {
             text = "♫"; textSize = 44f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
@@ -96,9 +153,27 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         catalogHeader.addView(button("Actualizar", false) { loadCatalog() })
         page.addView(catalogHeader, fullWidth().apply { bottomMargin = dp(8) })
+        catalogSummary = TextView(this).apply {
+            text = "Inicia sesión para explorar las canciones."
+            textSize = 12f; setTextColor(Color.rgb(177, 159, 190)); setPadding(dp(4), dp(4), dp(4), dp(8))
+        }
+        page.addView(catalogSummary, fullWidth())
         catalogContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(catalogContainer, fullWidth())
-        setContentView(scroll)
+        setContentView(root)
+
+        catalogSearchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                catalogQuery = s?.toString()?.trim().orEmpty()
+                searchClearButton.visibility = if (catalogQuery.isBlank()) View.GONE else View.VISIBLE
+                scheduledCatalogFilter?.let { searchHandler.removeCallbacks(it) }
+                val filterTask = Runnable { renderCatalogTracks() }
+                scheduledCatalogFilter = filterTask
+                searchHandler.postDelayed(filterTask, 140L)
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
 
         connectMediaController()
         val saved = AfrogoApi.savedToken(this)
@@ -154,57 +229,133 @@ class MainActivity : Activity() {
     private fun loadCatalog() {
         val token = AfrogoApi.savedToken(this)
         if (token.isBlank()) {
+            searchBar.visibility = View.GONE
+            catalogTracks = emptyList()
             authStatus.text = "Inicia sesión con una cuenta aprobada para ver la biblioteca."
+            catalogSummary.text = "Inicia sesión para explorar las canciones."
             renderCatalogMessage("La biblioteca compartida requiere iniciar sesión.")
             return
         }
+        searchBar.visibility = View.VISIBLE
         renderCatalogMessage("Consultando AzuraCast…")
         Thread {
             try {
                 val tracks = AfrogoApi.catalog(token)
                 runOnUiThread {
-                    catalogContainer.removeAllViews()
-                    if (tracks.isEmpty()) {
-                        renderCatalogMessage("El servidor no devolvió canciones. Comprueba el ID de la estación y los permisos de AzuraCast.")
-                    } else {
-                        authStatus.text = "Biblioteca sincronizada: ${tracks.size} canción(es) desde AzuraCast."
-                        tracks.take(200).forEach { track ->
-                            val row = LinearLayout(this).apply {
-                                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                                setPadding(dp(10), dp(9), dp(7), dp(9))
-                                background = GradientDrawable().apply { setColor(Color.rgb(27, 20, 34)); cornerRadius = dp(10).toFloat() }
-                            }
-                            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                            info.addView(TextView(this).apply {
-                                text = track.title; textSize = 14f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); maxLines = 2
-                            })
-                            info.addView(TextView(this).apply {
-                                text = "${track.artist} · ${track.album.ifBlank { track.genre }}"; textSize = 12f
-                                setTextColor(Color.rgb(180, 166, 192)); maxLines = 2
-                            })
-                            row.addView(info, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                            row.addView(button("▶", true) { playTrack(track) })
-                            catalogContainer.addView(row, fullWidth().apply { bottomMargin = dp(7) })
-                        }
-                        if (tracks.size > 200) {
-                            catalogContainer.addView(TextView(this).apply {
-                                text = "Se muestran las primeras 200 canciones. Android Auto tendrá la navegación por álbumes."; textSize = 12f
-                                setTextColor(Color.rgb(180, 166, 192))
-                            }, fullWidth())
-                        }
-                    }
+                    catalogTracks = tracks
+                    authStatus.text = "Biblioteca sincronizada: ${tracks.size} canción(es) desde AzuraCast."
+                    renderCatalogTracks()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     authStatus.text = e.message ?: "No se pudo cargar el catálogo."
+                    catalogSummary.text = "No se pudo actualizar la biblioteca."
                     renderCatalogMessage("No se pudo cargar el catálogo de AzuraCast.")
                 }
             }
         }.start()
     }
 
+    private fun renderCatalogTracks() {
+        if (!::catalogContainer.isInitialized) return
+        catalogContainer.removeAllViews()
+        val normalizedQuery = normalizeSearch(catalogQuery)
+        val filtered = catalogTracks.filter { track ->
+            normalizedQuery.isBlank() || normalizeSearch("${track.title} ${track.artist} ${track.album} ${track.genre}").contains(normalizedQuery)
+        }
+        catalogSummary.text = if (catalogQuery.isBlank()) {
+            "${catalogTracks.size} canciones · Biblioteca central de AzuraCast"
+        } else {
+            "${filtered.size} resultado(s) para «${catalogQuery}»"
+        }
+        if (filtered.isEmpty()) {
+            renderCatalogMessage(if (catalogQuery.isBlank()) "El servidor no devolvió canciones. Comprueba la estación y los permisos de AzuraCast." else "No encontramos canciones. Prueba con otro título, artista o álbum.")
+            return
+        }
+        filtered.take(150).forEach { track ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(10), dp(9), dp(10))
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(27, 20, 34)); cornerRadius = dp(12).toFloat()
+                    setStroke(dp(1), Color.rgb(48, 36, 57))
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { playTrack(track) }
+            }
+            val cover = ImageView(this).apply {
+                contentDescription = "Portada de ${track.title}"
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.rgb(120, 2, 210), Color.rgb(39, 20, 49))).apply { cornerRadius = dp(8).toFloat() }
+                tag = track.coverUrl
+            }
+            row.addView(cover, LinearLayout.LayoutParams(dp(66), dp(66)).apply { rightMargin = dp(12) })
+            if (track.coverUrl.isNotBlank()) loadCoverInto(track.coverUrl, cover)
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
+            info.addView(TextView(this).apply {
+                text = track.title; textSize = 15f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+            info.addView(TextView(this).apply {
+                text = "${track.artist} · ${track.album.ifBlank { "Sencillo" }}"; textSize = 12f
+                setTextColor(Color.rgb(185, 171, 197)); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(4), 0, dp(6))
+            })
+            val badges = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            badges.addView(TextView(this).apply {
+                text = if (track.album.isBlank()) "CANCIÓN" else "ÁLBUM"
+                textSize = 9f; setTextColor(Color.rgb(238, 222, 248)); setPadding(dp(6), dp(3), dp(6), dp(3))
+                background = GradientDrawable().apply { setColor(Color.rgb(64, 48, 76)); cornerRadius = dp(5).toFloat() }
+            })
+            badges.addView(TextView(this).apply {
+                text = track.genre.ifBlank { "Sin categoría" }; textSize = 9f; setTextColor(Color.rgb(226, 190, 250))
+                setPadding(dp(6), dp(3), dp(6), dp(3))
+                background = GradientDrawable().apply { setColor(Color.rgb(58, 32, 73)); cornerRadius = dp(5).toFloat() }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(6) })
+            info.addView(badges)
+            row.addView(info, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(button("▶", true) { playTrack(track) }, centeredSize(dp(46), dp(46)).apply { leftMargin = dp(8) })
+            catalogContainer.addView(row, fullWidth().apply { bottomMargin = dp(9) })
+        }
+        if (filtered.size > 150) {
+            catalogContainer.addView(TextView(this).apply {
+                text = "Mostrando 150 de ${filtered.size} resultados. Escribe en el buscador para filtrar la biblioteca."; textSize = 12f
+                setTextColor(Color.rgb(180, 166, 192)); setPadding(dp(4), dp(5), dp(4), dp(10))
+            }, fullWidth())
+        }
+    }
+
+    private fun normalizeSearch(value: String): String = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "").lowercase(java.util.Locale.ROOT).trim()
+
+    private fun loadCoverInto(url: String, image: ImageView) {
+        if (url.isBlank()) return
+        coverCache.get(url)?.let { image.setImageBitmap(it); return }
+        image.tag = url
+        coverExecutor.execute {
+            var bitmap: Bitmap? = null
+            var conn: HttpURLConnection? = null
+            try {
+                conn = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 7000; readTimeout = 9000; instanceFollowRedirects = true }
+                conn.inputStream.use { stream ->
+                    val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565; inSampleSize = 2 }
+                    bitmap = BitmapFactory.decodeStream(stream, null, options)
+                }
+            } catch (_: Exception) { }
+            finally { conn?.disconnect() }
+            val loaded = bitmap
+            if (loaded != null) {
+                coverCache.put(url, loaded)
+                runOnUiThread { if (image.tag == url) image.setImageBitmap(loaded) }
+            }
+        }
+    }
+
     private fun renderCatalogMessage(message: String) {
         catalogContainer.removeAllViews()
+        if (::catalogSummary.isInitialized) catalogSummary.text = message
         catalogContainer.addView(TextView(this).apply {
             text = message; textSize = 13f; setTextColor(Color.rgb(190, 177, 200)); setPadding(dp(5), dp(15), dp(5), dp(15))
         }, fullWidth())
@@ -294,6 +445,8 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        scheduledCatalogFilter?.let { searchHandler.removeCallbacks(it) }
+        coverExecutor.shutdownNow()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null; controllerFuture = null
         super.onDestroy()

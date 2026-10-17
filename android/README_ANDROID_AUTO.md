@@ -11,3 +11,7 @@ gradle --no-daemon -p android -PafrogoApiBaseUrl=https://afrogochincha.duckdns.o
 Prueba el APK en teléfono, Android Auto Desktop Head Unit y un coche/dispositivo real. La ruta de escucha de radio es provisional hasta confirmar AzuraCast > Public > Listen. Este ZIP es código fuente, no un APK listo para instalar.
 
 La aplicación usa el mismo catálogo central de AzuraCast. No configures la API Key de AzuraCast en Android.
+
+
+## Búsqueda en Android Auto
+La biblioteca implementa búsqueda de títulos, artistas, álbumes y géneros a través de las callbacks de MediaLibraryService, para que Android Auto pueda usar su interfaz de búsqueda/voz compatible. La interfaz en pantalla del automóvil la presenta Android Auto, no una vista personalizada de la app, por diseño de seguridad.

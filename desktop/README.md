@@ -1,3 +1,7 @@
+# Afrogo FM para PC
+
+Versión de fuentes: **3.27.0**. Incluye barra de búsqueda fija, resultados visuales con portadas más grandes y búsqueda persistente al reproducir desde los resultados.
+
 # Afrogo FM para PC — 3.23.0
 
 Aplicación Electron para Windows. La música del catálogo se consulta desde la biblioteca de AzuraCast a través del gateway HTTPS de Afrogo. Las subidas del administrador se reenvían al Media Manager de AzuraCast, para que la biblioteca sea compartida con dispositivos autorizados.
