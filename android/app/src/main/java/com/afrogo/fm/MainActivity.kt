@@ -759,7 +759,7 @@ class MainActivity : Activity() {
         val titleText = metadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: "AfroGo FM"
         val artistText = metadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: "Radio oficial · Música en vivo"
         content.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(Color.rgb(130, 75, 43), Color.rgb(83, 52, 37), Color.rgb(29, 24, 23), bgColor))
+            intArrayOf(Color.rgb(47, 28, 58), Color.rgb(30, 24, 34), bgColor))
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -787,6 +787,7 @@ class MainActivity : Activity() {
             contentDescription = "Portada de la reproducción actual"
             tag = artworkUrl
         }
+        playerScreenCover = cover
         val screenWidth = resources.displayMetrics.widthPixels
         val coverSize = (screenWidth - dp(76)).coerceAtMost(dp(440))
         content.addView(cover, centeredSize(coverSize, coverSize).apply { bottomMargin = dp(30) })
@@ -799,12 +800,16 @@ class MainActivity : Activity() {
             setPadding(dp(24), 0, dp(24), 0)
         }
         val trackLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        trackLabels.addView(TextView(this).apply {
+        val verticalTitle = TextView(this).apply {
             text = titleText; textSize = 16f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); maxLines = 2
-        }, fullWidth())
-        trackLabels.addView(TextView(this).apply {
+        }
+        val verticalArtist = TextView(this).apply {
             text = artistText; textSize = 12f; setTextColor(Color.rgb(226, 211, 199)); maxLines = 1
-        }, fullWidth().apply { topMargin = dp(3) })
+        }
+        playerScreenTitle = verticalTitle
+        playerScreenArtist = verticalArtist
+        trackLabels.addView(verticalTitle, fullWidth())
+        trackLabels.addView(verticalArtist, fullWidth().apply { topMargin = dp(3) })
         trackLine.addView(trackLabels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         trackLine.addView(button("×", false) { /* La canción permanece en la cola. */ }, centeredSize(dp(42), dp(42)))
         trackLine.addView(button("＋", false) { showCreateDialog() }, centeredSize(dp(42), dp(42)).apply { leftMargin = dp(3) })
@@ -824,17 +829,22 @@ class MainActivity : Activity() {
         }
         val elapsed = TextView(this).apply { text = "0:00"; textSize = 10f; setTextColor(Color.rgb(220, 204, 191)) }
         val duration = TextView(this).apply { text = "--:--"; textSize = 10f; setTextColor(Color.rgb(220, 204, 191)); gravity = Gravity.END }
+        playerScreenProgress = progress
+        playerScreenElapsed = elapsed
+        playerScreenDuration = duration
         times.addView(elapsed, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         times.addView(duration, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(times, fullWidth().apply { bottomMargin = dp(20) })
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         controls.addView(button("|◀", false) { controller?.seekToPreviousMediaItem() }, centeredSize(dp(58), dp(48)).apply { rightMargin = dp(22) })
-        controls.addView(button(if (controller?.isPlaying == true) "Ⅱ" else "▶", true) {
-            val player = controller
-            if (player == null) connectMediaController() else if (player.isPlaying) player.pause() else player.play()
+        val verticalToggle = button(if (controller?.isPlaying == true || controller?.playWhenReady == true) "Ⅱ" else "▶", true) {
+            val active = controller
+            if (active == null) connectMediaController() else if (active.isPlaying || active.playWhenReady) active.pause() else active.play()
             updatePlaybackUi()
-        }, centeredSize(dp(62), dp(58)).apply { rightMargin = dp(22) })
+        }
+        playerScreenToggle = verticalToggle
+        controls.addView(verticalToggle, centeredSize(dp(62), dp(58)).apply { rightMargin = dp(22) })
         controls.addView(button("▶|", false) { controller?.seekToNextMediaItem() }, centeredSize(dp(58), dp(48)))
         content.addView(controls, fullWidth().apply { bottomMargin = dp(24) })
 
@@ -1641,7 +1651,12 @@ class MainActivity : Activity() {
 
     private fun loadCoverInto(url: String, image: ImageView) {
         if (url.isBlank()) return
-        coverCache.get(url)?.let { image.setImageBitmap(it); return }
+        coverCache.get(url)?.let { cached ->
+            image.tag = url
+            image.setImageBitmap(cached)
+            applyArtworkBackground(image, cached)
+            return
+        }
         image.tag = url
         coverExecutor.execute {
             var bitmap: Bitmap? = null
@@ -1660,23 +1675,39 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (image.tag == url) {
                         image.setImageBitmap(loaded)
-                        val sample = Bitmap.createScaledBitmap(loaded, 1, 1, true)
-                        val pixel = sample.getPixel(0, 0)
-                        val r = (Color.red(pixel) * 0.52f).toInt().coerceIn(10, 100)
-                        val g = (Color.green(pixel) * 0.52f).toInt().coerceIn(10, 90)
-                        val b = (Color.blue(pixel) * 0.58f).toInt().coerceIn(15, 115)
-                        val dynamicColor = Color.rgb(r, g, b)
-                        if (::miniPlayerCover.isInitialized && image === miniPlayerCover) {
-                            miniPlayer.background = android.graphics.drawable.ColorDrawable(dynamicColor)
-                        }
-                        if (image.contentDescription?.toString() == "Portada de la reproducción actual") {
-                            (image.parent as? View)?.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                                intArrayOf(dynamicColor, darken(dynamicColor), bgColor))
-                        }
-                        sample.recycle()
+                        applyArtworkBackground(image, loaded)
                     }
                 }
             }
+        }
+    }
+
+    /** Derive a muted dominant color from the cover and tint the player background. */
+    private fun applyArtworkBackground(image: ImageView, bitmap: Bitmap) {
+        // Downsample to a small grid and choose the most frequent coarse RGB bucket,
+        // rather than relying on a single corner pixel which may be black.
+        val sample = Bitmap.createScaledBitmap(bitmap, 12, 12, true)
+        val buckets = HashMap<Int, Int>()
+        for (y in 0 until sample.height) for (x in 0 until sample.width) {
+            val pixel = sample.getPixel(x, y)
+            val key = ((Color.red(pixel) shr 4) shl 8) or ((Color.green(pixel) shr 4) shl 4) or (Color.blue(pixel) shr 4)
+            buckets[key] = (buckets[key] ?: 0) + 1
+        }
+        val dominant = buckets.maxByOrNull { it.value }?.key ?: 0x302040
+        sample.recycle()
+        val raw = Color.rgb(((dominant shr 8) and 0xF) * 17, ((dominant shr 4) and 0xF) * 17, (dominant and 0xF) * 17)
+        val dynamicColor = Color.rgb(
+            (Color.red(raw) * 0.62f).toInt().coerceIn(12, 115),
+            (Color.green(raw) * 0.62f).toInt().coerceIn(10, 100),
+            (Color.blue(raw) * 0.68f).toInt().coerceIn(15, 125)
+        )
+        if (::miniPlayerCover.isInitialized && image === miniPlayerCover) {
+            miniPlayer.background = android.graphics.drawable.ColorDrawable(dynamicColor)
+        }
+        if (image.contentDescription?.toString() == "Portada de la reproducción actual") {
+            val parent = image.parent as? View
+            parent?.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(dynamicColor, darken(dynamicColor), bgColor))
         }
     }
 
