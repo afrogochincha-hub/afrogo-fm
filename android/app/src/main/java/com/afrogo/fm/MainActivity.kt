@@ -24,6 +24,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.util.LruCache
 import androidx.core.content.ContextCompat
@@ -551,47 +552,118 @@ class MainActivity : Activity() {
 
     private fun showPlayerScreen() {
         val content = prepareScreen("player")
-        content.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(Color.rgb(64, 38, 72), Color.rgb(24, 20, 25), bgColor))
+        content.setPadding(dp(4), dp(8), dp(4), dp(20))
         val current = controller?.currentMediaItem
         val metadata = current?.mediaMetadata
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        header.addView(button("⌄", false) { showHome() }, centeredSize(dp(44), dp(44)))
-        header.addView(TextView(this).apply {
-            text = "REPRODUCIENDO"; textSize = 11f; gravity = Gravity.CENTER; setTextColor(mutedColor); letterSpacing = 0.12f
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(button("⋮", false) { showCreateDialog() }, centeredSize(dp(44), dp(44)))
-        content.addView(header, fullWidth().apply { bottomMargin = dp(24) })
+        val artworkUrl = metadata?.artworkUri?.toString().orEmpty()
+        val titleText = metadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: "AfroGo FM"
+        val artistText = metadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: "Radio oficial · Música en vivo"
+        content.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.rgb(130, 75, 43), Color.rgb(83, 52, 37), Color.rgb(29, 24, 23), bgColor))
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), 0, dp(8), 0)
+        }
+        header.addView(button("⌄", false) { showHome() }, centeredSize(dp(42), dp(42)))
+        val headerLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        headerLabels.addView(TextView(this).apply {
+            text = "Reproduciendo desde lista"; textSize = 10f; gravity = Gravity.CENTER
+            setTextColor(Color.rgb(245, 224, 209))
+        }, fullWidth())
+        headerLabels.addView(TextView(this).apply {
+            text = metadata?.albumTitle?.toString()?.takeIf { it.isNotBlank() } ?: "AfroGo FM"
+            textSize = 11f; gravity = Gravity.CENTER; setTypeface(null, Typeface.BOLD); setTextColor(Color.WHITE)
+            maxLines = 1
+        }, fullWidth())
+        header.addView(headerLabels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(button("⋮", false) { showCreateDialog() }, centeredSize(dp(42), dp(42)))
+        content.addView(header, fullWidth().apply { bottomMargin = dp(16) })
+
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = roundedSurface(accentColor, dp(16), accentColor)
+            background = roundedSurface(accentColor, dp(8), accentColor)
             contentDescription = "Portada de la reproducción actual"
+            tag = artworkUrl
         }
-        content.addView(cover, centeredSize(dp(270), dp(270)).apply { bottomMargin = dp(25) })
-        val artworkUrl = metadata?.artworkUri?.toString().orEmpty()
+        val screenWidth = resources.displayMetrics.widthPixels
+        val coverSize = (screenWidth - dp(76)).coerceAtMost(dp(440))
+        content.addView(cover, centeredSize(coverSize, coverSize).apply { bottomMargin = dp(30) })
         if (artworkUrl.isNotBlank()) loadCoverInto(artworkUrl, cover)
         else cover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
-        content.addView(TextView(this).apply {
-            text = metadata?.title?.toString() ?: "AfroGo FM"; textSize = 23f; setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD); maxLines = 2; gravity = Gravity.CENTER
-        }, fullWidth().apply { bottomMargin = dp(5) })
-        content.addView(TextView(this).apply {
-            text = metadata?.artist?.toString() ?: "Radio oficial · Música en vivo"
-            textSize = 14f; setTextColor(Color.rgb(205, 199, 212)); gravity = Gravity.CENTER
-        }, fullWidth().apply { bottomMargin = dp(23) })
+
+        val trackLine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(24), 0, dp(24), 0)
+        }
+        val trackLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        trackLabels.addView(TextView(this).apply {
+            text = titleText; textSize = 16f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD); maxLines = 2
+        }, fullWidth())
+        trackLabels.addView(TextView(this).apply {
+            text = artistText; textSize = 12f; setTextColor(Color.rgb(226, 211, 199)); maxLines = 1
+        }, fullWidth().apply { topMargin = dp(3) })
+        trackLine.addView(trackLabels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        trackLine.addView(button("×", false) { /* La canción permanece en la cola. */ }, centeredSize(dp(42), dp(42)))
+        trackLine.addView(button("＋", false) { showCreateDialog() }, centeredSize(dp(42), dp(42)).apply { leftMargin = dp(3) })
+        content.addView(trackLine, fullWidth().apply { bottomMargin = dp(15) })
+
+        val progress = SeekBar(this).apply {
+            max = 1000
+            progressTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.argb(100, 255, 255, 255))
+            contentDescription = "Progreso de reproducción"
+        }
+        content.addView(progress, fullWidth().apply { leftMargin = dp(22); rightMargin = dp(22) })
+        val times = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(24), 0, dp(24), 0)
+        }
+        val elapsed = TextView(this).apply { text = "0:00"; textSize = 10f; setTextColor(Color.rgb(220, 204, 191)) }
+        val duration = TextView(this).apply { text = "--:--"; textSize = 10f; setTextColor(Color.rgb(220, 204, 191)); gravity = Gravity.END }
+        times.addView(elapsed, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        times.addView(duration, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        content.addView(times, fullWidth().apply { bottomMargin = dp(20) })
+
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-        controls.addView(button("|◀", false) { controller?.seekToPreviousMediaItem() }, centeredSize(dp(58), dp(52)).apply { rightMargin = dp(14) })
+        controls.addView(button("|◀", false) { controller?.seekToPreviousMediaItem() }, centeredSize(dp(58), dp(48)).apply { rightMargin = dp(22) })
         controls.addView(button(if (controller?.isPlaying == true) "Ⅱ" else "▶", true) {
             val player = controller
             if (player == null) connectMediaController() else if (player.isPlaying) player.pause() else player.play()
             updatePlaybackUi()
-        }, centeredSize(dp(68), dp(60)).apply { rightMargin = dp(14) })
-        controls.addView(button("▶|", false) { controller?.seekToNextMediaItem() }, centeredSize(dp(58), dp(52)))
-        content.addView(controls, fullWidth().apply { bottomMargin = dp(17) })
-        content.addView(TextView(this).apply {
-            text = "La reproducción también funciona desde los controles multimedia y Android Auto."
-            textSize = 12f; setTextColor(mutedColor); gravity = Gravity.CENTER
-        }, fullWidth())
+        }, centeredSize(dp(62), dp(58)).apply { rightMargin = dp(22) })
+        controls.addView(button("▶|", false) { controller?.seekToNextMediaItem() }, centeredSize(dp(58), dp(48)))
+        content.addView(controls, fullWidth().apply { bottomMargin = dp(24) })
+
+        val player = controller
+        if (player != null) {
+            val total = player.duration
+            if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) duration.text = formatPlayerTime(total)
+            val position = player.currentPosition.coerceAtLeast(0L)
+            if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) progress.progress = ((position.toDouble() / total) * 1000).toInt()
+            elapsed.text = formatPlayerTime(position)
+            progress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, value: Int, fromUser: Boolean) {
+                    if (fromUser && total > 0 && total != androidx.media3.common.C.TIME_UNSET) elapsed.text = formatPlayerTime(total * value / 1000)
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) player.seekTo(total * (seekBar?.progress ?: 0) / 1000)
+                }
+            })
+        }
+        val footer = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(24), dp(8), dp(24), 0) }
+        footer.addView(TextView(this).apply { text = "▣  Dispositivos disponibles"; textSize = 11f; setTextColor(Color.WHITE) }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        footer.addView(TextView(this).apply { text = "↗"; textSize = 20f; setTextColor(Color.WHITE) })
+        content.addView(footer, fullWidth())
+    }
+
+    private fun formatPlayerTime(milliseconds: Long): String {
+        val seconds = (milliseconds.coerceAtLeast(0L) / 1000L).toInt()
+        return String.format(java.util.Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
     }
 
     private fun showCreateDialog() {
