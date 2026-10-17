@@ -546,16 +546,15 @@ class MainActivity : Activity() {
         mainContent.addView(coloredFeatureCard("AFROGO FM", "Radio oficial · Música en vivo", "▶ Escuchar") { toggleRadio() },
             fullWidth().apply { bottomMargin = dp(18) })
 
-        mainScroll.addView(mainContent, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        mainScroll.addView(mainContent, ScrollView.LayoutParams(
+            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
         ))
         wideRoot.addView(mainScroll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
         screenHost.addView(wideRoot, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         ))
     }
-
-    private fun showSearch() {
+\n    private fun showSearch() {
         val content = prepareScreen("search")
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         header.addView(brandAvatar(38), LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(10) })
@@ -656,6 +655,10 @@ class MainActivity : Activity() {
     }
 
     private fun showPlayerScreen() {
+        if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            showPlayerScreenLandscape()
+            return
+        }
         val content = prepareScreen("player")
         content.setPadding(dp(4), dp(8), dp(4), dp(20))
         val current = controller?.currentMediaItem
@@ -764,6 +767,130 @@ class MainActivity : Activity() {
         footer.addView(TextView(this).apply { text = "▣  Dispositivos disponibles"; textSize = 11f; setTextColor(Color.WHITE) }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         footer.addView(TextView(this).apply { text = "↗"; textSize = 20f; setTextColor(Color.WHITE) })
         content.addView(footer, fullWidth())
+    }
+
+
+    /**
+     * Wide player layout: large artwork on the left and playback information/controls
+     * on the right, so landscape mode uses the available width instead of showing
+     * only the mini-player strip.
+     */
+    private fun showPlayerScreenLandscape() {
+        screenHost.removeAllViews()
+        activeTab = "player"
+        updateNavSelection()
+        miniPlayer.visibility = View.GONE
+        if (appShell.childCount > 0) appShell.getChildAt(appShell.childCount - 1).visibility = View.GONE
+
+        val current = controller?.currentMediaItem
+        val metadata = current?.mediaMetadata
+        val artworkUrl = metadata?.artworkUri?.toString().orEmpty()
+        val titleText = metadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: "AfroGo FM"
+        val artistText = metadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: "Radio oficial · Música en vivo"
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(22), dp(14), dp(22), dp(14))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(47, 28, 58), Color.rgb(18, 18, 18))
+            )
+        }
+        val coverColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val cover = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = roundedSurface(accentColor, dp(8), accentColor)
+            contentDescription = "Portada de la canción actual"
+            tag = artworkUrl
+        }
+        val availableHeight = (resources.displayMetrics.heightPixels - dp(70)).coerceAtLeast(dp(150))
+        val coverSize = (availableHeight - dp(16)).coerceAtMost(dp(300))
+        coverColumn.addView(cover, LinearLayout.LayoutParams(coverSize, coverSize))
+        if (artworkUrl.isNotBlank()) loadCoverInto(artworkUrl, cover)
+        else cover.setImageResource(com.afrogo.fm.R.drawable.afrogo_icon_foreground)
+        root.addView(coverColumn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.9f))
+
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(22), dp(8), dp(12), dp(8))
+        }
+        val topRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        topRow.addView(button("⌄", false) { showHome() }, centeredSize(dp(42), dp(42)))
+        topRow.addView(TextView(this).apply {
+            text = "REPRODUCIENDO"; textSize = 10f; gravity = Gravity.CENTER
+            setTextColor(Color.rgb(196, 178, 208))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        topRow.addView(button("⋮", false) { showCreateDialog() }, centeredSize(dp(42), dp(42)))
+        panel.addView(topRow, fullWidth().apply { bottomMargin = dp(18) })
+
+        panel.addView(TextView(this).apply {
+            text = titleText; textSize = 22f; maxLines = 2
+            setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+        }, fullWidth())
+        panel.addView(TextView(this).apply {
+            text = artistText; textSize = 14f
+            setTextColor(Color.rgb(205, 195, 214))
+        }, fullWidth().apply { topMargin = dp(5); bottomMargin = dp(16) })
+
+        val progress = SeekBar(this).apply {
+            max = 1000
+            progressTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.argb(100, 255, 255, 255))
+            contentDescription = "Progreso de reproducción"
+        }
+        val player = controller
+        val elapsed = TextView(this).apply { text = "0:00"; textSize = 10f; setTextColor(mutedColor) }
+        val duration = TextView(this).apply { text = "--:--"; textSize = 10f; setTextColor(mutedColor); gravity = Gravity.END }
+        val times = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        times.addView(elapsed, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        times.addView(duration, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        panel.addView(progress, fullWidth())
+        panel.addView(times, fullWidth().apply { bottomMargin = dp(18) })
+        if (player != null) {
+            val total = player.duration
+            if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) {
+                duration.text = formatPlayerTime(total)
+                progress.progress = ((player.currentPosition.coerceAtLeast(0L).toDouble() / total) * 1000).toInt()
+            }
+            elapsed.text = formatPlayerTime(player.currentPosition)
+            progress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, value: Int, fromUser: Boolean) {
+                    if (fromUser && total > 0 && total != androidx.media3.common.C.TIME_UNSET) elapsed.text = formatPlayerTime(total * value / 1000)
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    if (total > 0 && total != androidx.media3.common.C.TIME_UNSET) player.seekTo(total * (seekBar?.progress ?: 0) / 1000)
+                }
+            })
+        }
+
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        controls.addView(button("|◀", false) { controller?.seekToPreviousMediaItem() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        controls.addView(button(if (controller?.isPlaying == true) "Ⅱ" else "▶", true) {
+            val active = controller
+            if (active == null) connectMediaController() else if (active.isPlaying) active.pause() else active.play()
+            updatePlaybackUi()
+        }, centeredSize(dp(62), dp(58)))
+        controls.addView(button("▶|", false) { controller?.seekToNextMediaItem() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        panel.addView(controls, fullWidth().apply { topMargin = dp(6); bottomMargin = dp(12) })
+        panel.addView(TextView(this).apply {
+            text = "La reproducción también funciona con los controles multimedia y Android Auto."
+            textSize = 11f; gravity = Gravity.CENTER
+            setTextColor(Color.rgb(155, 148, 164))
+        }, fullWidth())
+        root.addView(panel, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f))
+        screenHost.addView(root, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
     }
 
     private fun formatPlayerTime(milliseconds: Long): String {
