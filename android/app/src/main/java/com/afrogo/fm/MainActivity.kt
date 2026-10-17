@@ -1699,7 +1699,11 @@ class MainActivity : Activity() {
             if (currentItem == null) {
                 miniPlayer.visibility = View.GONE
             } else {
-                miniPlayer.visibility = View.VISIBLE
+                // The landscape layout has its own player panel on the left.
+                // Never show the bottom mini-player strip in landscape mode.
+                miniPlayer.visibility = if (
+                    resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                ) View.GONE else View.VISIBLE
                 miniPlayerTitle.text = current?.title?.toString() ?: "AfroGo FM"
                 miniPlayerArtist.text = current?.artist?.toString() ?: "Radio en vivo"
                 miniPlayerPlayButton.text = if (playing) "Ⅱ" else "▶"
