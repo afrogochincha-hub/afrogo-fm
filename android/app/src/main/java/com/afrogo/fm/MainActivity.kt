@@ -219,8 +219,8 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(34), dp(24), dp(30))
             setBackgroundColor(bgColor)
         }
-        loginRoot.addView(page, ScrollView.LayoutParams(
-            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        loginRoot.addView(page, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
         ))
         val brandIcon = ImageView(this).apply {
             setImageResource(com.afrogo.fm.R.drawable.afrogo_login_logo)
@@ -392,8 +392,8 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(13), dp(16), dp(24))
             setBackgroundColor(bgColor)
         }
-        scroll.addView(content, ScrollView.LayoutParams(
-            ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
+        scroll.addView(content, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
         ))
         screenHost.addView(scroll, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
