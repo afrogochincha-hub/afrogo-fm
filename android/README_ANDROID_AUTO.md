@@ -1,4 +1,4 @@
-# Afrogo FM para Android Auto — 1.4.0
+# Afrogo FM para Android Auto — 1.9.0
 
 Android Auto usa la misma aplicación Android instalada en el teléfono. El servicio `AfrogoMediaService` (Media3 `MediaLibraryService`) publica las ramas `Radio en vivo` y `Biblioteca musical`; los álbumes están agrupados por artista + nombre de álbum y las canciones sueltas también se pueden reproducir.
 

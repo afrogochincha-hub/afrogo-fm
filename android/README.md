@@ -1,4 +1,4 @@
-# Afrogo FM para Android — 1.4.0
+# Afrogo FM para Android — 1.9.0
 
 Proyecto fuente Android nativo (Kotlin + Media3). El mismo APK incluye el servicio multimedia que Android Auto utiliza; no se debe distribuir como dos aplicaciones independientes.
 

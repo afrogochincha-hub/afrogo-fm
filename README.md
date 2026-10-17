@@ -5,7 +5,7 @@ Código fuente de AfroGo FM para Windows, Android y Android Auto, conectado a la
 ## Componentes y versiones de esta entrega
 
 - **PC Windows (Electron):** 3.31.0. La sesión se guarda cifrada con Electron `safeStorage` y se borra cuando el usuario elige **Cerrar sesión**.
-- **Android y Android Auto:** 1.8.0 (`versionCode` 11). La sesión se guarda en el almacenamiento privado de la aplicación, se renueva al volver a abrirla y se elimina con **Cerrar sesión**.
+- **Android y Android Auto:** 1.9.0 (`versionCode` 12). La app móvil tiene navegación inferior, Inicio, Buscar, Biblioteca, AfroGo+, Crear, mini reproductor y reproductor ampliado. La sesión se guarda en el almacenamiento privado de la aplicación, se renueva al volver a abrirla y se elimina con **Cerrar sesión**.
 - **Gateway/backend:** 1.3.0. Emite token de acceso de 7 días y token de renovación de hasta 365 días.
 
 ## Carpetas
@@ -27,6 +27,7 @@ Sigue `SUBIR_A_GITHUB_PASO_A_PASO.txt`. Importa estos archivos en una copia limp
 ## Comprobaciones ejecutadas al preparar el ZIP
 
 - Sintaxis de `desktop/main.js` y `desktop/preload.js`: correcta.
+- Estructura del código Kotlin revisada y versión Android aumentada a 1.9.0; este entorno no incluye Android SDK/Gradle para confirmar el APK.
 - Sintaxis de los scripts JavaScript incluidos en `desktop/app/index.html`: correcta.
 - `npm run check` en `backend/`: correcto, 5 pruebas pasaron incluyendo sesión persistente, renovación y aislamiento de biblioteca por cuenta.
 - Marcadores de conflicto de Git (`<<<<<<<`, `=======`, `>>>>>>>`): no encontrados en los archivos fuente.

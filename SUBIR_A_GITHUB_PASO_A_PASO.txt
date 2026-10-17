@@ -9,7 +9,7 @@ ESTE ZIP YA TIENE LAS CARPETAS EN LA RAÍZ. No busques una carpeta interior llam
 5. Copia TODO el contenido extraído (incluyendo la carpeta oculta .github si Windows la muestra) y pégalo en la raíz de la carpeta afrogo-fm-limpio-2. Acepta combinar carpetas y reemplazar archivos cuando Windows lo pregunte.
 6. MUY IMPORTANTE: el ZIP no incluye .git. No borres ni reemplaces la carpeta oculta .git que pertenece a la copia clonada. Tampoco copies ningún .env real, node_modules, música ni datos de usuarios.
 7. Abre GitHub Desktop y revisa Changes. Deben aparecer los archivos nuevos/modificados, sin un cuadro de merge. Si vuelve a aparecer “Resolve conflicts before Merge” o un aviso de merge, detente y no pulses Continue merge; envía una captura.
-8. En Summary escribe: AfroGo FM 3.31.0 / Android 1.8.0 - sesión persistente
+8. En Summary escribe: AfroGo FM 3.31.0 / Android 1.9.0 - rediseño móvil y sesión persistente
 9. Pulsa Commit to main.
 10. Cuando aparezca Push origin, púlsalo y espera a que termine.
 11. En GitHub, abre el repositorio y ve a Actions. Abre la ejecución más reciente. Comprueba que backend-check, windows-desktop y android-debug terminen en verde.

@@ -1,0 +1,19 @@
+AFROGO FM ANDROID — REDISEÑO MÓVIL 1.9.0
+
+Incluye:
+- Inicio de sesión con identidad AfroGo y acceso a radio en vivo.
+- Navegación inferior Inicio / Buscar / Biblioteca / AfroGo+ / Crear.
+- Inicio con carrusel de canciones del catálogo y emisora en vivo.
+- Búsqueda, categorías, biblioteca, favoritos y playlists sincronizadas.
+- Mini reproductor persistente y pantalla del reproductor.
+- Se mantiene Media3 y el servicio Android Auto existente.
+
+Para aplicarlo: copia el contenido de la carpeta android a la carpeta android del repositorio clonado.
+No reemplaces ni borres el archivo .git del repositorio.
+La versión Android sube a 1.9.0 (versionCode 12).
+
+Validaciones manuales sugeridas después de subir a GitHub:
+1. Esperar que GitHub Actions compile la APK.
+2. Instalar la APK y comprobar el login.
+3. Probar radio, búsqueda, reproducción de canción, favoritos y playlists.
+4. Conectar Android Auto y verificar reproducción/controles multimedia.

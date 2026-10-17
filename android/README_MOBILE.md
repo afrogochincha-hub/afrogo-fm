@@ -1,4 +1,4 @@
-# Afrogo FM para Android — 1.4.0
+# Afrogo FM para Android — 1.9.0
 
 Esta app móvil usa la misma biblioteca central de AzuraCast que PC y Android Auto mediante el gateway de Afrogo. El paquete incluye inicio de sesión central, solicitud de acceso, lista de canciones del catálogo y reproducción de canciones mediante enlaces firmados de corta duración.
 
@@ -26,3 +26,13 @@ La aplicación usa el mismo catálogo central de AzuraCast. No configures la API
 - Playlists creadas y editadas en el móvil se guardan en la biblioteca personal del gateway.
 - Favoritos e historial de reproducción asociados a la cuenta y sincronizados con PC.
 - El servicio multimedia Android Auto puede explorar favoritos y playlists de la cuenta.
+
+
+## Versión 1.9.0 — Rediseño móvil AfroGo
+- Nueva pantalla de acceso con identidad morada AfroGo y acceso directo a la radio pública.
+- Navegación móvil inferior: Inicio, Buscar, Biblioteca, AfroGo+ y Crear.
+- Inicio con carrusel de canciones reales del catálogo, tarjeta de radio en vivo y accesos rápidos.
+- Buscar con categorías, campo de búsqueda y resultados de la biblioteca central.
+- Biblioteca con filtros para canciones, favoritos y playlists sincronizadas en la nube.
+- Mini reproductor persistente dentro de la app y pantalla de reproducción ampliada.
+- La sesión guardada, el backend, los favoritos, las playlists y el servicio Android Auto se conservan.
