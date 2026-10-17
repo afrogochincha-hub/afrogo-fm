@@ -89,7 +89,7 @@ class MainActivity : Activity() {
         }, centeredSize(dp(38), dp(44)))
         catalogSearchInput = EditText(this).apply {
             hint = "Buscar canción, artista o álbum…"
-            textSize = 15f; singleLine = true
+            textSize = 15f; isSingleLine = true
             setHintTextColor(Color.rgb(172, 156, 184)); setTextColor(Color.WHITE)
             setPadding(dp(6), dp(8), dp(4), dp(8))
             background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)

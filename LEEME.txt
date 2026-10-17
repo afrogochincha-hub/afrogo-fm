@@ -1,0 +1,13 @@
+Corrección de compilación Android 1.5.1
+
+Cambio:
+- MainActivity.kt: EditText ahora usa isSingleLine = true (propiedad válida de Android View).
+
+Para aplicarlo con GitHub Desktop:
+1. Extrae este ZIP.
+2. Copia la carpeta android dentro de la carpeta local de tu repositorio afrogo-fm, aceptando reemplazar el archivo si lo solicita.
+3. Commit: Fix Android EditText single-line property.
+4. Push origin.
+5. Abre GitHub Actions y comprueba el trabajo android-debug.
+
+Este ZIP reemplaza únicamente MainActivity.kt; no contiene claves ni contraseñas.
