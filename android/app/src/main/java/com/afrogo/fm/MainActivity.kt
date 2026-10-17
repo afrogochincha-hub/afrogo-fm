@@ -1654,9 +1654,22 @@ class MainActivity : Activity() {
             try {
                 controller = future.get()
                 controller?.addListener(object : Player.Listener {
+                    // Refresh controls for both actual playback changes and play/pause requests.
                     override fun onIsPlayingChanged(isPlaying: Boolean) = updatePlaybackUi()
+                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = updatePlaybackUi()
                     override fun onPlaybackStateChanged(playbackState: Int) = updatePlaybackUi()
+                    // Track changes in a queue and live-stream metadata updates must refresh title/cover.
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updatePlaybackUi()
+                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) = updatePlaybackUi()
+                    override fun onEvents(player: Player, events: Player.Events) {
+                        if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) ||
+                            events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED) ||
+                            events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
+                            events.contains(Player.EVENT_MEDIA_METADATA_CHANGED) ||
+                            events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED)) {
+                            updatePlaybackUi()
+                        }
+                    }
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         playbackStatus.text = "No se pudo reproducir. Comprueba la URL de escucha de AzuraCast."
                     }
