@@ -26,3 +26,10 @@ La configuración `app-config.json` apunta a `https://afrogochincha.duckdns.org/
 ## Clasificación automática de géneros (3.25.0)
 
 El cliente normaliza el género del catálogo central. Si falta el tag, utiliza señales explícitas del título/álbum/ruta y reglas conservadoras de artistas conocidos. Las categorías de acceso rápido agrupan alias compatibles y muestran el número de canciones detectadas. Lo que no tenga señales suficientes queda como `Sin categoría`; no se presenta una inferencia como una certeza acústica.
+
+## Versión 3.26.0 — Iconos de Windows
+La compilación de Windows ahora incluye `afrogo-icon.ico` y `afrogo-icon.png` dentro del paquete, incrusta el ICO en el ejecutable y usa el mismo icono para la ventana de Electron. En Windows, el icono ya fijado en la barra de tareas puede quedar en caché; después de actualizar, desancla el icono antiguo y fija el nuevo ejecutable si fuera necesario.
+
+
+## Icono oficial 3.26.1
+El icono de Windows (`afrogo-icon.png` y `afrogo-icon.ico`) utiliza el archivo oficial morado con marca blanca facilitado para este proyecto. El ICO incluye tamaños de 16 a 256 px y se referencia desde `main.js` y `package.json`. Si Windows muestra el icono anterior, desancla el acceso directo viejo y fija el ejecutable recién compilado.

@@ -7,6 +7,11 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const mm = require('music-metadata');
 
+// Stable Windows identity so the branded icon is used by the window and taskbar.
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.afrogo.fm');
+}
+
 // Read runtime configuration in the main process (full Node.js is available here).
 // Electron's sandboxed preload has a restricted require() and must not read app-config.json itself.
 function loadAfrogoRuntimeConfig() {
@@ -360,7 +365,7 @@ function createWindow() {
   const runtimeConfig = loadAfrogoRuntimeConfig();
   const win = new BrowserWindow({
     width: 1280, height: 850, minWidth: 900, minHeight: 650,
-    title: 'Afrogo FM', icon: path.join(__dirname, 'afrogo-icon.png'), backgroundColor: '#100D14', autoHideMenuBar: true,
+    title: 'Afrogo FM', icon: path.join(__dirname, process.platform === 'win32' ? 'afrogo-icon.ico' : 'afrogo-icon.png'), backgroundColor: '#100D14', autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

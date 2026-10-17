@@ -1,3 +1,13 @@
+## 3.26.1
+- Reemplazados los iconos anteriores por el icono oficial proporcionado por el usuario: fondo degradado morado y marca Afrogo blanca.
+- Regenerado `afrogo-icon.ico` con múltiples tamaños para ventana, barra de título, ejecutable portable y barra de tareas de Windows.
+- Conservada la configuración `appId` y el resto de funciones de la versión 3.26.0.
+
+## 3.26.0
+- Actualizado el icono de Windows para la barra de título y la barra de tareas con la identidad visual de Afrogo FM.
+- El paquete portable de Windows incluye los recursos PNG e ICO y actualiza el icono incrustado del ejecutable.
+- Añadido un identificador de aplicación de Windows estable para mejorar la agrupación del icono en la barra de tareas.
+
 # Cambios recientes
 
 ## 3.25.0

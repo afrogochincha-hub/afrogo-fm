@@ -1,7 +1,7 @@
 {
   "name": "afrogo-fm",
-  "version": "3.25.0",
-  "description": "Afrogo FM con clasificación automática de géneros y catálogo central AzuraCast",
+  "version": "3.26.1",
+  "description": "Afrogo FM con icono oficial, catálogo central AzuraCast y clasificación automática de géneros",
   "main": "main.js",
   "author": "Afrogo FM",
   "license": "UNLICENSED",
@@ -25,7 +25,9 @@
       "preload.js",
       "app/**/*",
       "package.json",
-      "app-config.json"
+      "app-config.json",
+      "afrogo-icon.png",
+      "afrogo-icon.ico"
     ],
     "win": {
       "target": [
@@ -36,7 +38,7 @@
           ]
         }
       ],
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "icon": "afrogo-icon.ico"
     }
   },
