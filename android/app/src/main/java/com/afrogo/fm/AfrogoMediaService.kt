@@ -151,11 +151,13 @@ class AfrogoMediaService : MediaLibraryService() {
 
     private fun childrenFor(parentId: String, params: LibraryParams?): List<MediaItem> {
         return when {
+            // Android Auto: biblioteca raíz breve y directa para reducir pasos y distracciones.
+            // La radio en vivo aparece como acción reproducible desde la pantalla principal.
             parentId == rootId -> listOf(
-                folder(radiosId, "Radio en vivo", "Emisora oficial de Afrogo FM"),
-                folder(libraryId, "Biblioteca musical", "Catálogo central de AzuraCast"),
-                folder(favoritesId, "Mis favoritos", "Canciones guardadas en tu cuenta"),
-                folder(playlistsId, "Mis playlists", "Colecciones sincronizadas de tu cuenta")
+                liveMediaItem(),
+                folder(libraryId, "Canciones", "Buscar y reproducir música del catálogo AfroGo"),
+                folder(playlistsId, "Playlists", "Tus listas con canciones y portadas"),
+                folder(favoritesId, "Favoritos", "Canciones guardadas en tu cuenta")
             )
             parentId == radiosId -> listOf(liveMediaItem())
             parentId == favoritesId -> favoriteItems().ifEmpty { listOf(infoItem("afrogo_no_favorites", "Aún no tienes canciones favoritas")) }

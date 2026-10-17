@@ -1,0 +1,10 @@
+AfroGo FM Android Auto — simplificación 1.9.4
+
+Cambios:
+- La raíz de Android Auto presenta cuatro opciones directas: Radio en vivo, Canciones, Playlists y Favoritos.
+- Se elimina un nivel de navegación para acceder a la radio en vivo.
+- Se acortan los nombres para que sean más legibles en la pantalla del vehículo.
+- Se conserva MediaLibraryService, ExoPlayer, búsqueda del catálogo, reproducción y sincronización de playlists.
+
+Nota: Android Auto controla la presentación visual final según la plantilla del sistema y las reglas de seguridad. Este cambio simplifica la estructura del catálogo; no intenta replicar la interfaz de escritorio dentro del coche.
+Compilación no verificada en este entorno. Ejecutar GitHub Actions antes de instalar.

@@ -405,7 +405,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         val content = prepareScreen("home")
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        header.addView(brandAvatar(42), LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(10) })
+        header.addView(profileAvatar(42), LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(10) })
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
         titles.addView(TextView(this).apply {
             text = "AfroGo FM"; textSize = 21f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
@@ -691,6 +691,81 @@ class MainActivity : Activity() {
             .setNegativeButton("Cerrar sesión") { _, _ -> logout() }
             .setNeutralButton("Cancelar", null)
             .show()
+    }
+
+    /** Menú de perfil con accesos rápidos de cuenta. */
+    private fun showProfileMenu() {
+        val signedIn = authStatus.text.toString().contains("Sesión activa:", ignoreCase = true)
+        val accountName = if (signedIn) authStatus.text.toString()
+            .substringAfter("Sesión activa:", "Cuenta AfroGo").trim().ifBlank { "Cuenta AfroGo" }
+            else "Cuenta AfroGo"
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(8))
+            setBackgroundColor(Color.rgb(31, 30, 32))
+        }
+        val identity = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(8), dp(4), dp(14)); isClickable = true
+            setOnClickListener { showAccountDialog() }
+        }
+        identity.addView(brandAvatar(48), LinearLayout.LayoutParams(dp(48), dp(48)).apply { rightMargin = dp(12) })
+        val identityText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        identityText.addView(TextView(this).apply {
+            text = accountName; textSize = 16f; setTextColor(Color.WHITE); setTypeface(null, Typeface.BOLD)
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        identityText.addView(TextView(this).apply { text = "Ver perfil"; textSize = 12f; setTextColor(Color.LTGRAY); setPadding(0, dp(3), 0, 0) })
+        identity.addView(identityText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        panel.addView(identity, fullWidth())
+        addProfileMenuItem(panel, "＋", "Añadir cuenta", "", Color.LTGRAY) { showLoginHint() }
+        addProfileMenuItem(panel, "⌁", "Estadísticas de escucha", "Novedad", Color.WHITE) {
+            AlertDialog.Builder(this).setTitle("Estadísticas de escucha")
+                .setMessage("Las estadísticas de escucha estarán disponibles próximamente.")
+                .setPositiveButton("Entendido", null).show()
+        }
+        addProfileMenuItem(panel, "◷", "Recientes", "", Color.WHITE) { catalogMode = "recent"; showLibrary() }
+        addProfileMenuItem(panel, "♢", "Tus avisos", "", Color.WHITE) {
+            AlertDialog.Builder(this).setTitle("Tus avisos").setMessage("No tienes avisos nuevos por ahora.")
+                .setPositiveButton("Aceptar", null).show()
+        }
+        addProfileMenuItem(panel, "⚙", "Configuración y privacidad", "", Color.WHITE) {
+            AlertDialog.Builder(this).setTitle("Configuración y privacidad")
+                .setItems(arrayOf("Actualizar biblioteca", "Cuenta", "Cerrar sesión")) { _, which ->
+                    when (which) {
+                        0 -> loadCatalog()
+                        1 -> showAccountDialog()
+                        2 -> AlertDialog.Builder(this).setTitle("Cerrar sesión")
+                            .setMessage("¿Quieres cerrar tu sesión de AfroGo FM?")
+                            .setNegativeButton("Cancelar", null)
+                            .setPositiveButton("Cerrar sesión") { _, _ -> logout() }.show()
+                    }
+                }.show()
+        }
+        AlertDialog.Builder(this).setView(panel).setNegativeButton("Cerrar", null).show()
+    }
+
+    private fun addProfileMenuItem(panel: LinearLayout, symbol: String, title: String, subtitle: String, iconColor: Int, action: () -> Unit) {
+        val item = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(11), dp(4), dp(11)); isClickable = true; isFocusable = true
+            setOnClickListener { action() }
+        }
+        item.addView(TextView(this).apply {
+            text = symbol; textSize = 22f; gravity = Gravity.CENTER; setTextColor(iconColor)
+        }, LinearLayout.LayoutParams(dp(38), dp(38)))
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
+        texts.addView(TextView(this).apply { text = title; textSize = 14f; setTextColor(Color.WHITE) })
+        if (subtitle.isNotBlank()) texts.addView(TextView(this).apply {
+            text = subtitle; textSize = 10f; setTextColor(Color.rgb(150, 190, 255)); setPadding(0, dp(2), 0, 0)
+        })
+        item.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        panel.addView(item, fullWidth())
+    }
+
+    private fun profileAvatar(size: Int): View = brandAvatar(size).apply {
+        isClickable = true; isFocusable = true; setOnClickListener { showProfileMenu() }
+        contentDescription = "Abrir menú de perfil"
     }
 
     private fun showLoginHint() {

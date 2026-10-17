@@ -1,0 +1,7 @@
+AfroGo FM Android 1.9.3 — Menú de perfil
+
+- El círculo de perfil de Inicio abre un menú con Ver perfil, Añadir cuenta, Estadísticas de escucha, Recientes, Tus avisos y Configuración y privacidad.
+- Configuración permite actualizar biblioteca, abrir cuenta y cerrar sesión con confirmación.
+- Se conserva el flujo de autenticación existente.
+- Estadísticas y avisos son informativos; no se conectaron servicios externos nuevos.
+- La compilación Android completa debe confirmarse en GitHub Actions.
