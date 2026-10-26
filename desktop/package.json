@@ -1,7 +1,7 @@
 {
   "name": "afrogo-fm",
-  "version": "3.31.0",
-  "description": "Afrogo FM con sesión persistente cifrada y biblioteca personal en la nube",
+  "version": "3.32.0",
+  "description": "Afrogo FM con recomendaciones personalizadas, playlists compartibles y AfroGo DJ",
   "main": "main.js",
   "author": "Afrogo FM",
   "license": "UNLICENSED",

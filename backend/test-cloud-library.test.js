@@ -77,7 +77,7 @@ test('personal library persists playlists, favorites and history separately by a
   response = await fetch(`${base}/api/me/library`, {
     method: 'PUT', headers,
     body: JSON.stringify({
-      playlists: [{ id: 'pl_test_1', name: 'Mi playlist', description: 'Prueba', songIds: ['azura:157'], cover: '' }],
+      playlists: [{ id: 'pl_test_1', name: 'Mi playlist', description: 'Prueba', songIds: ['azura:157'], cover: '', visibility: 'unlisted', shareToken: 'share-token-for-test-1234567890' }],
       favorites: ['azura:157'], savedTracks: ['azura:157'],
       recentTracks: [{ id: 'azura:157', title: 'Canción de prueba', artist: 'Artista', album: 'Álbum', genre: 'Pop', cover: '', playedAt: Date.now() }]
     })
@@ -85,6 +85,14 @@ test('personal library persists playlists, favorites and history separately by a
   assert.equal(response.status, 200);
   library = await response.json();
   assert.equal(library.playlists.length, 1);
+  assert.equal(library.playlists[0].visibility, 'unlisted');
+  assert.equal(library.playlists[0].shareToken, 'share-token-for-test-1234567890');
+  const sharedResponse = await fetch(`${base}/api/playlists/shared/share-token-for-test-1234567890`);
+  assert.equal(sharedResponse.status, 200, 'unlisted playlist should be available by its share token');
+  const sharedData = await sharedResponse.json();
+  assert.equal(sharedData.playlist.name, 'Mi playlist');
+  assert.equal(sharedData.playlist.visibility, 'unlisted');
+  assert.equal(sharedData.playlist.owner, 'Administrador Afrogo');
   assert.deepEqual(library.favorites, ['azura:157']);
   assert.equal(library.recentTracks[0].title, 'Canción de prueba');
 
@@ -113,6 +121,9 @@ test('personal library persists playlists, favorites and history separately by a
     body: JSON.stringify({ playlist: { id: 'pl_test_1', name: 'Mi playlist editada', description: '', songIds: ['azura:157', 'azura:22'], cover: '' } })
   });
   assert.equal(response.status, 200);
+  const updatedPlaylist = (await response.json()).playlist;
+  assert.equal(updatedPlaylist.visibility, 'unlisted', 'updating playlist without visibility must preserve privacy setting');
+  assert.equal(updatedPlaylist.shareToken, 'share-token-for-test-1234567890', 'updating playlist must preserve its share token');
   response = await fetch(`${base}/api/me/favorites`, {
     method: 'POST', headers, body: JSON.stringify({ trackId: 'azura:157', favorite: false })
   });

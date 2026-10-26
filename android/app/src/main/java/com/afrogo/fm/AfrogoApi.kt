@@ -99,6 +99,9 @@ object AfrogoApi {
     fun setFavorite(token: String, trackId: String, favorite: Boolean): JSONObject = request("/api/me/favorites", "POST", JSONObject().put("trackId", trackId).put("favorite", favorite), token)
     fun setSavedTrack(token: String, trackId: String, saved: Boolean): JSONObject = request("/api/me/saved-tracks", "POST", JSONObject().put("trackId", trackId).put("saved", saved), token)
     fun addRecent(token: String, track: JSONObject): JSONObject = request("/api/me/history", "POST", JSONObject().put("track", track), token)
+    fun recommendations(token: String, limit: Int = 24): JSONObject = request("/api/me/recommendations?limit=${limit.coerceIn(1, 50)}", token = token)
+    fun createDjSession(token: String, mood: String = "personalizado", limit: Int = 20): JSONObject = request("/api/me/dj-session", "POST", JSONObject().put("mood", mood).put("limit", limit.coerceIn(10, 30)), token)
+    fun sharedPlaylistUrl(shareToken: String): String = AzuraConfig.API_BASE_URL.trimEnd('/') + "/api/playlists/shared/" + java.net.URLEncoder.encode(shareToken, "UTF-8")
 
     fun catalog(token: String): List<AfrogoTrack> {
         val data = request("/api/catalog", token = token)

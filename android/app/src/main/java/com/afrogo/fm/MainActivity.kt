@@ -739,6 +739,8 @@ class MainActivity : Activity() {
             setTextColor(mutedColor)
         }, fullWidth().apply { bottomMargin = dp(20) })
         content.addView(coloredFeatureCard("Tu música, en un solo lugar", "Accede a tu biblioteca central, favoritos y playlists sincronizadas entre PC y móvil.", "Ver biblioteca") { showLibrary() }, fullWidth().apply { bottomMargin = dp(13) })
+        content.addView(coloredFeatureCard("Para ti", "Recomendaciones según tus favoritos y tu historial musical.", "✦ Ver recomendaciones") { showPersonalRecommendations() }, fullWidth().apply { bottomMargin = dp(13) })
+        content.addView(coloredFeatureCard("AfroGo DJ IA", "Genera una sesión de canciones basada en tus gustos y el ambiente que elijas.", "🎧 Crear sesión") { showDjSession("personalizado") }, fullWidth().apply { bottomMargin = dp(13) })
         content.addView(coloredFeatureCard("Radio en vivo", "Escucha la señal oficial de AfroGo FM.", "▶  Escuchar radio") { toggleRadio() }, fullWidth().apply { bottomMargin = dp(13) })
         content.addView(TextView(this).apply {
             text = "Esta sección se irá ampliando con nuevas funciones de AfroGo."
@@ -1608,9 +1610,71 @@ class MainActivity : Activity() {
                 text = "${playlist.optJSONArray("songIds")?.length() ?: 0} canciones"; textSize = 12f; setTextColor(mutedColor); setPadding(0, dp(4), 0, 0)
             })
             row.addView(labels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(button("⋯", false) { showPlaylistPrivacyDialog(playlist) }, centeredSize(dp(42), dp(42)))
             row.addView(TextView(this).apply { text = "›"; textSize = 28f; setTextColor(Color.WHITE) }, centeredSize(dp(24), dp(42)))
             content.addView(row, fullWidth().apply { bottomMargin = dp(9) })
         }
+    }
+
+    private fun showPlaylistPrivacyDialog(playlist: JSONObject) {
+        val options = arrayOf("Privada (solo yo)", "Compartida por enlace", "Pública")
+        val current = when (playlist.optString("visibility", "private")) { "unlisted" -> 1; "public" -> 2; else -> 0 }
+        AlertDialog.Builder(this).setTitle("Privacidad · ${playlist.optString("name", "Playlist")}")
+            .setSingleChoiceItems(options, current) { dialog, which ->
+                val visibility = when (which) { 1 -> "unlisted"; 2 -> "public"; else -> "private" }
+                playlist.put("visibility", visibility)
+                if (playlist.optString("shareToken").isBlank()) playlist.put("shareToken", java.util.UUID.randomUUID().toString().replace("-", "") + java.util.UUID.randomUUID().toString().replace("-", ""))
+                dialog.dismiss()
+                persistPlaylist(playlist, "Privacidad actualizada")
+                if (visibility != "private") {
+                    val link = AfrogoApi.sharedPlaylistUrl(playlist.optString("shareToken"))
+                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Playlist AfroGo", link))
+                    authStatus.text = "Privacidad guardada. Enlace copiado: $link"
+                }
+            }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun showPersonalRecommendations() {
+        val token = AfrogoApi.savedToken(this)
+        if (token.isBlank()) { authStatus.text = "Inicia sesión para recibir recomendaciones personales."; return }
+        authStatus.text = "Buscando recomendaciones para ti…"
+        Thread {
+            try {
+                val result = AfrogoApi.recommendations(token, 30)
+                val items = result.optJSONArray("items") ?: JSONArray()
+                val labels = (0 until items.length()).mapNotNull { i -> items.optJSONObject(i)?.let { "${it.optString("title")} — ${it.optString("artist")} · ${it.optString("genre")}" } }.toTypedArray()
+                runOnUiThread {
+                    AlertDialog.Builder(this).setTitle("✦ Para ti")
+                        .setMessage(if (labels.isEmpty()) "Todavía no hay canciones para recomendar. Escucha música y guarda favoritos para personalizar tu selección." else labels.joinToString("\n"))
+                        .setPositiveButton("Volver a biblioteca", null).show()
+                    authStatus.text = "Recomendaciones listas: ${labels.size} canciones."
+                }
+            } catch (e: Exception) { runOnUiThread { authStatus.text = "No se pudieron cargar recomendaciones: ${e.message}" } }
+        }.start()
+    }
+
+    private fun showDjSession(mood: String) {
+        val token = AfrogoApi.savedToken(this)
+        if (token.isBlank()) { authStatus.text = "Inicia sesión para usar AfroGo DJ."; return }
+        val moods = arrayOf("Personalizado", "Relajado", "Fiesta", "Energía")
+        AlertDialog.Builder(this).setTitle("AfroGo DJ IA · Elige ambiente").setItems(moods) { _, which ->
+            val selectedMood = moods[which].lowercase(java.util.Locale.ROOT)
+            authStatus.text = "AfroGo DJ está preparando tu sesión…"
+            Thread {
+                try {
+                    val session = AfrogoApi.createDjSession(token, selectedMood, 20)
+                    val tracks = session.optJSONArray("tracks") ?: JSONArray()
+                    val lines = (0 until tracks.length()).mapNotNull { i -> tracks.optJSONObject(i)?.let { "${i + 1}. ${it.optString("title")} — ${it.optString("artist")}" } }
+                    runOnUiThread {
+                        AlertDialog.Builder(this).setTitle(session.optString("title", "AfroGo DJ"))
+                            .setMessage(lines.joinToString("\n") + "\n\n" + session.optString("note", ""))
+                            .setPositiveButton("Listo", null).show()
+                        authStatus.text = "Sesión DJ generada: ${lines.size} canciones."
+                    }
+                } catch (e: Exception) { runOnUiThread { authStatus.text = "No se pudo crear la sesión DJ: ${e.message}" } }
+            }.start()
+        }.setNegativeButton("Cancelar", null).show()
     }
 
     private fun createCloudPlaylist(track: AfrogoTrack?) {
@@ -1623,7 +1687,7 @@ class MainActivity : Activity() {
                 val songIds = JSONArray()
                 if (track != null) songIds.put(cloudTrackId(track))
                 val playlist = JSONObject().put("id", "pl_" + java.util.UUID.randomUUID().toString().replace("-", ""))
-                    .put("name", name.take(60)).put("description", "").put("songIds", songIds).put("cover", "")
+                    .put("name", name.take(60)).put("description", "").put("songIds", songIds).put("cover", "").put("visibility", "private")
                 persistPlaylist(playlist, "Playlist creada y sincronizada")
             }
             .setNegativeButton("Cancelar", null).show()

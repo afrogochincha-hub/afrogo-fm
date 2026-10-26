@@ -24,6 +24,8 @@ const AZURA_BASE = String(process.env.AZURACAST_BASE_URL || '').replace(/\/+$/, 
 const STATION_ID = String(process.env.AZURACAST_STATION_ID || '').trim();
 const AZURA_KEY = String(process.env.AZURACAST_API_KEY || '').trim();
 const AZURA_UPLOAD_ENABLED = String(process.env.AZURACAST_UPLOAD_ENABLED || 'false').trim().toLowerCase() === 'true';
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
+const OPENAI_DJ_MODEL = String(process.env.OPENAI_DJ_MODEL || 'gpt-4o-mini').trim();
 const PUBLIC_BASE = String(process.env.PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -169,6 +171,8 @@ function sanitizePlaylist(raw) {
     description: String(raw.description || '').trim().slice(0, 300),
     songIds: uniqueTrackIds(raw.songIds, 3000),
     cover: cleanCover(raw.cover),
+    visibility: ['private', 'unlisted', 'public'].includes(raw.visibility) ? raw.visibility : 'private',
+    shareToken: /^[A-Za-z0-9_-]{20,80}$/.test(String(raw.shareToken || '')) ? String(raw.shareToken) : crypto.randomBytes(18).toString('base64url'),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -214,6 +218,11 @@ function prepareLibraryUpdate(existing, input) {
     const playlists = []; const seen = new Set();
     for (const raw of input.playlists.slice(0, 200)) {
       const playlist = sanitizePlaylist(raw);
+      const previous = (existing.playlists || []).find(item => item.id === playlist?.id);
+      if (playlist && previous) {
+        if (!raw.visibility) playlist.visibility = previous.visibility || 'private';
+        if (!raw.shareToken) playlist.shareToken = previous.shareToken || playlist.shareToken;
+      }
       if (playlist && !seen.has(playlist.id)) { seen.add(playlist.id); playlists.push(playlist); }
     }
     next.playlists = playlists;
@@ -226,6 +235,81 @@ function prepareLibraryUpdate(existing, input) {
   }
   return next;
 }
+function buildPersonalRecommendations(library, catalog, limit = 24) {
+  const history = Array.isArray(library.recentTracks) ? library.recentTracks : [];
+  const favorites = new Set(library.favorites || []);
+  const genreScore = new Map(); const artistScore = new Map(); const trackScore = new Map();
+  for (const item of history.slice(0, 120)) {
+    const ageHours = Math.max(0, (Date.now() - Number(item.playedAt || Date.now())) / 3600000);
+    const weight = Math.max(0.2, 3 * Math.exp(-ageHours / (24 * 10)));
+    const genre = String(item.genre || '').trim(); const artist = String(item.artist || '').trim().toLowerCase();
+    if (genre) genreScore.set(genre, (genreScore.get(genre) || 0) + weight);
+    if (artist) artistScore.set(artist, (artistScore.get(artist) || 0) + weight);
+    trackScore.set(String(item.id), (trackScore.get(String(item.id)) || 0) + weight);
+  }
+  for (const id of favorites) trackScore.set(String(id), (trackScore.get(String(id)) || 0) + 5);
+  const normalizeId = value => String(value || '').replace(/^azura:/, '');
+  const known = new Set([...favorites, ...history.map(x => String(x.id))].map(normalizeId));
+  const ranked = catalog.map(track => {
+    const genre = String(track.genre || ''); const artist = String(track.artist || '').toLowerCase();
+    const genreAffinity = genreScore.get(genre) || 0; const artistAffinity = artistScore.get(artist) || 0;
+    const seenPenalty = known.has(normalizeId(track.id)) ? 4 : 0;
+    const score = genreAffinity * 2 + artistAffinity * 1.5 - seenPenalty;
+    return { ...track, recommendationScore: score, recommendationReason: artistAffinity > genreAffinity ? 'Porque escuchas a este artista' : genreAffinity > 0 ? `Porque escuchas ${genre}` : 'Descubre algo nuevo' };
+  });
+  ranked.sort((a,b) => b.recommendationScore - a.recommendationScore || String(a.title).localeCompare(String(b.title)));
+  // Keep a mix of familiar genres and discovery; if there is no history, return a varied deterministic catalog sample.
+  const selected = []; const genres = new Set();
+  for (const track of ranked) {
+    if (selected.length >= limit) break;
+    const g = track.genre || 'Sin categoría';
+    if (genres.has(g) && selected.length < Math.min(limit, 8)) continue;
+    selected.push(track); genres.add(g);
+  }
+  for (const track of ranked) if (selected.length < limit && !selected.some(x => x.id === track.id)) selected.push(track);
+  return selected;
+}
+async function makeDjSession(library, catalog, input = {}) {
+  const mood = String(input.mood || 'personalizado').trim().slice(0, 40);
+  const limit = Math.min(30, Math.max(10, Number(input.limit) || 20));
+  const recommendations = buildPersonalRecommendations(library, catalog, Math.min(100, limit + 20));
+  let ordered = recommendations;
+  let engine = 'personalized-ranking-v1';
+  // If the operator configures an OpenAI key on the backend, use AI to order only known catalog IDs.
+  // No email, account ID, or raw listening timestamps are sent to the model.
+  if (OPENAI_API_KEY && recommendations.length) {
+    try {
+      const promptTracks = recommendations.map(t => ({ id: String(t.id), title: t.title, artist: t.artist, genre: t.genre, album: t.album }));
+      const taste = [...new Set((library.recentTracks || []).slice(0, 40).map(t => String(t.genre || '').trim()).filter(Boolean))].slice(0, 12);
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: OPENAI_DJ_MODEL, temperature: 0.7, response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'Eres el selector musical de AfroGo DJ. Devuelve solo JSON con una propiedad orderedIds, un array de IDs existentes. Crea una secuencia variada que respete el ambiente solicitado y los géneros preferidos. No inventes canciones ni IDs.' },
+            { role: 'user', content: JSON.stringify({ mood, preferredGenres: taste, requestedGenre: String(input.genre || ''), tracks: promptTracks }) }
+          ] })
+      });
+      if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}`);
+      const payload = await response.json();
+      const content = payload.choices?.[0]?.message?.content || '{}';
+      const parsed = JSON.parse(content);
+      const byId = new Map(recommendations.map(t => [String(t.id), t]));
+      const aiOrdered = (Array.isArray(parsed.orderedIds) ? parsed.orderedIds : []).map(id => byId.get(String(id))).filter(Boolean);
+      const seen = new Set(aiOrdered.map(t => String(t.id)));
+      ordered = [...aiOrdered, ...recommendations.filter(t => !seen.has(String(t.id)))];
+      engine = 'openai-dj';
+    } catch (error) {
+      console.warn('AfroGo DJ IA: se usa el selector local porque la IA no respondió:', error.message);
+    }
+  }
+  const requestedGenre = String(input.genre || '').trim().toLowerCase();
+  const filtered = requestedGenre ? ordered.filter(t => String(t.genre || '').toLowerCase().includes(requestedGenre)) : ordered;
+  const source = filtered.length >= 3 ? filtered : ordered;
+  const tracks = source.slice(0, limit).map((t, i) => ({ ...t, djPosition: i + 1, djIntro: i === 0 ? `Empezamos tu sesión ${mood}.` : i % 4 === 0 ? `Seguimos con ${t.genre || 'más música'} para mantener el ambiente.` : '' }));
+  return { title: `AfroGo DJ · ${mood}`, mood, generatedAt: new Date().toISOString(), engine, tracks,
+    note: engine === 'openai-dj' ? 'La IA ordenó las canciones existentes del catálogo según el ambiente y tus preferencias. Las transiciones de audio y la locución por voz requieren un motor adicional.' : 'Sesión personalizada con el selector local. Configura OPENAI_API_KEY en el backend para habilitar la selección generativa. Las transiciones de audio y la locución por voz requieren un motor adicional.' };
+}
+
 async function initializeUsers() {
   await fs.promises.mkdir(DATA_DIR, { recursive: true });
   try { users = JSON.parse(await fs.promises.readFile(USERS_FILE, 'utf8')); if (!Array.isArray(users)) users = []; }
@@ -447,6 +531,18 @@ async function handle(req, res) {
     if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de enviar tokens de sesión.' });
     const user = authUser(req); return user ? json(res, 200, { user: safeUser(user) }) : json(res, 401, { error: 'Sesión vencida o no válida.' });
   }
+  const sharedPlaylistMatch = pathname.match(/^\/api\/playlists\/shared\/([A-Za-z0-9_-]{20,80})$/);
+  if (req.method === 'GET' && sharedPlaylistMatch) {
+    const token = sharedPlaylistMatch[1];
+    for (const [ownerId, rawLibrary] of Object.entries(userLibraries)) {
+      const owner = users.find(u => u.id === ownerId && u.status === 'approved');
+      if (!owner) continue;
+      const playlist = (Array.isArray(rawLibrary.playlists) ? rawLibrary.playlists : []).find(p => p.shareToken === token && (p.visibility === 'unlisted' || p.visibility === 'public'));
+      if (playlist) return json(res, 200, { playlist: { id: playlist.id, name: playlist.name, description: playlist.description || '', songIds: playlist.songIds || [], cover: playlist.cover || '', visibility: playlist.visibility, owner: owner.name || 'Usuario AfroGo', updatedAt: playlist.updatedAt || null } });
+    }
+    return json(res, 404, { error: 'La playlist no existe, es privada o el enlace ha caducado.' });
+  }
+
   if (pathname.startsWith('/api/me/')) {
     if (!requireHttps(req)) return json(res, 426, { error: 'Configura HTTPS antes de sincronizar tu biblioteca personal.' });
     const account = authUser(req);
@@ -454,6 +550,24 @@ async function handle(req, res) {
 
     if (req.method === 'GET' && pathname === '/api/me/library') {
       return json(res, 200, { userId: account.id, ...libraryFor(account.id) });
+    }
+
+    if (req.method === 'GET' && pathname === '/api/me/recommendations') {
+      try {
+        const catalog = await getCatalog();
+        const library = libraryFor(account.id);
+        const limit = Math.min(50, Math.max(1, Number(parsed.searchParams.get('limit')) || 24));
+        return json(res, 200, { items: buildPersonalRecommendations(library, catalog, limit), basedOn: { favorites: library.favorites.length, history: library.recentTracks.length }, engine: 'personalized-ranking-v1' });
+      } catch (e) { return json(res, e.status || 502, { error: e.message || 'No se pudieron generar recomendaciones.' }); }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/me/dj-session') {
+      const input = await readJson(req);
+      try {
+        const catalog = await getCatalog();
+        const session = await makeDjSession(libraryFor(account.id), catalog, input || {});
+        return json(res, 200, session);
+      } catch (e) { return json(res, e.status || 502, { error: e.message || 'No se pudo crear la sesión AfroGo DJ.' }); }
     }
 
     if (req.method === 'PUT' && pathname === '/api/me/library') {
@@ -472,7 +586,12 @@ async function handle(req, res) {
       if (!playlist) return json(res, 400, { error: 'La playlist necesita un identificador y un nombre válidos.' });
       const library = libraryFor(account.id);
       const index = library.playlists.findIndex(item => item.id === playlist.id);
-      if (index >= 0) library.playlists[index] = playlist;
+      if (index >= 0) {
+        const existing = library.playlists[index];
+        if (!(input.playlist || input).shareToken) playlist.shareToken = existing.shareToken || playlist.shareToken;
+        if (!(input.playlist || input).visibility) playlist.visibility = existing.visibility || 'private';
+        library.playlists[index] = playlist;
+      }
       else {
         if (library.playlists.length >= 200) return json(res, 413, { error: 'Has alcanzado el límite de 200 playlists por cuenta.' });
         library.playlists.push(playlist);
